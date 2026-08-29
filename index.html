@@ -308,11 +308,18 @@ function migrateProgramLibrary(){
     p.treningIds=libIds;
     p.frekvencija=libIds.length;
     p.migratedFromCycleId=c.id;
+    if(!c.sourceProgramId)c.sourceProgramId=p.id;
+    if(!c.programNaziv)c.programNaziv=p.naziv;
+    if(!c.frekvencija)c.frekvencija=libIds.length;
   }else{
-    S.programBiblioteka.push({
+    const np={
       id:uid(),naziv:name,treningIds:libIds,frekvencija:libIds.length,
       createdAt:iso(new Date()),migratedFromCycleId:c.id
-    });
+    };
+    S.programBiblioteka.push(np);
+    if(!c.sourceProgramId)c.sourceProgramId=np.id;
+    if(!c.programNaziv)c.programNaziv=np.naziv;
+    if(!c.frekvencija)c.frekvencija=libIds.length;
   }
 }
 function PROG(){return S.programBiblioteka||[]}
@@ -763,11 +770,43 @@ function statusLabel(st){
   return {done:"Odrađen",custom:"Custom",skipped:"Preskočen",pending:"Nije još odrađen"}[st]||"Nije još odrađen";
 }
 
+function defaultWeekPlanIds(c=activeCycle()){
+  if(!c)return [];
+
+  // Program is the source of truth for the default week.
+  let p=null;
+  if(c.sourceProgramId)p=PROG().find(x=>x.id===c.sourceProgramId);
+  if(!p)p=PROG().find(x=>x.migratedFromCycleId===c.id);
+  if(!p && c.programNaziv)p=PROG().find(x=>x.naziv===c.programNaziv);
+
+  if(p&&Array.isArray(p.treningIds)&&p.treningIds.length){
+    const ids=[];
+    p.treningIds.forEach(libId=>{
+      // A mesocycle holds snapshots, so map the library workout id
+      // to the snapshot id used inside this concrete cycle.
+      let snap=(c.sabloni||[]).find(s=>s.sourceLibraryId===libId);
+      if(!snap){
+        const lib=LIB().find(x=>x.id===libId);
+        if(lib)snap=(c.sabloni||[]).find(s=>normName(cleanWorkoutName(s.naziv))===normName(cleanWorkoutName(lib.naziv)));
+      }
+      if(snap&&!ids.includes(snap.id))ids.push(snap.id);
+    });
+    if(ids.length)return ids;
+  }
+
+  // Newer cycles already contain only the workouts selected for their program.
+  if(Number(c.frekvencija)>0 && (c.sabloni||[]).length===Number(c.frekvencija)){
+    return c.sabloni.map(s=>s.id);
+  }
+
+  // Compatibility fallback for old data only.
+  return (c.sabloni||[]).slice(0,Number(c.frekvencija)||c.sabloni.length).map(s=>s.id);
+}
 function weeklyPlanIds(){
   if(!S.sedmicniPlan)S.sedmicniPlan={};
   const saved=S.sedmicniPlan[pon0];
   if(Array.isArray(saved))return saved;
-  return SAB().filter(s=>s.tip!=="Rezervni").map(s=>s.id);
+  return defaultWeekPlanIds();
 }
 function vPregledSedmica(f){
   const all=SAB(),aktivni=weeklyPlanIds(),statuses=weeklyStatuses();
