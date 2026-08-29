@@ -177,6 +177,42 @@ button.btn.pri:active{filter:brightness(1.05)}
 /* Positive / selected text on dark backgrounds */
 .status-ok,.positive,.progress-good{color:var(--g-lite)}
 
+
+.planStatusRow{
+  min-height:92px;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 148px;
+  align-items:center;
+  gap:12px;
+}
+.planStatusRow .planStatusText{
+  min-width:0;
+}
+.planStatusRow .planStatusText b{
+  display:block;
+  line-height:1.25;
+}
+.planStatusRow .planStatusText .sm{
+  margin-top:4px;
+}
+.planStatusRow select{
+  width:148px !important;
+  max-width:148px !important;
+  min-width:148px;
+  margin:0;
+}
+@media(max-width:390px){
+  .planStatusRow{
+    grid-template-columns:minmax(0,1fr) 132px;
+    gap:9px;
+  }
+  .planStatusRow select{
+    width:132px !important;
+    max-width:132px !important;
+    min-width:132px;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -652,8 +688,8 @@ function vPregledSedmica(f){
     <div class="sm mute" style="margin-top:8px">Označi treninge koji su planirani za ovu nedelju.</div>
   </div>
   ${planned.length?`<div class="xs" style="margin:16px 0 8px">Realizacija plana</div><div class="list">${planned.map(s=>{const st=statusOf(s);return `<div class="card tight">
-    <div class="row between"><div><b>${esc(s.naziv)}</b><div class="sm mute">${statusLabel(st)}</div></div>
-      <select data-wstatus="${s.id}" style="width:auto;max-width:150px;padding:7px 8px">
+    <div class="planStatusRow"><div class="planStatusText"><b>${esc(s.naziv)}</b><div class="sm mute">${statusLabel(st)}</div></div>
+      <select data-wstatus="${s.id}" style="padding:7px 8px">
         <option value="pending" ${st==="pending"?"selected":""}>Nije još</option>
         <option value="done" ${st==="done"?"selected":""}>Odrađen</option>
         <option value="custom" ${st==="custom"?"selected":""}>Custom</option>
