@@ -454,7 +454,7 @@ function finishWorkout(sab){
   const session=sesija,records=[],groupDone={},exerciseDone=[];
   session.stavke.forEach(s=>{
     const sets=completedSets(s);if(!sets.length)return;
-    sets.forEach(u=>records.push({id:uid(),datum:session.datum,mezociklusId:(activeCycle()||{}).id,vezbaId:s.vezbaId,serije:1,pon:Number(u.pon)||null,kg:u.kg===""?null:Number(u.kg),napomena:u.nap||"",rir:u.rir||""}));
+    sets.forEach(u=>records.push({id:uid(),datum:session.datum,mezociklusId:(activeCycle()||{}).id,vezbaId:s.vezbaId,serije:1,pon:Number(u.pon)||null,kg:u.kg===""?null:Number(u.kg),napomena:u.nap||"",rir:u.rir||"",sabId:session.sabId||"",originalSabId:session.sabId||"",custom:!!session.custom}));
     const g=GRUPA[vpod(s.vezbaId)]||vpod(s.vezbaId)||"Ostalo";groupDone[g]=(groupDone[g]||0)+sets.length;
     exerciseDone.push({vezbaId:s.vezbaId,sets,plan:s.plan,ponTarget:s.pon});
   });
@@ -470,6 +470,11 @@ function finishWorkout(sab){
     if(a.kg>b.kg)progress.push(`${vname(x.vezbaId)} · +${(a.kg-b.kg).toFixed(1).replace('.0','')} kg`);
     else if(a.kg===b.kg&&a.pon>b.pon)progress.push(`${vname(x.vezbaId)} · +${a.pon-b.pon} pon. na ${a.kg||"istoj"}${a.kg?" kg":""}`);
   });
+
+  const wk=monday(session.datum);
+  if(!S.sedmicniStatus)S.sedmicniStatus={};
+  if(!S.sedmicniStatus[wk])S.sedmicniStatus[wk]={};
+  if(session.sabId)S.sedmicniStatus[wk][session.sabId]=session.custom?"custom":"done";
 
   const prs=[],advice=[];
   exerciseDone.forEach(x=>{
@@ -527,6 +532,24 @@ function zadnjiTreninzi(){const dani=[...new Set(S.dnevnik.map(l=>l.datum))].sor
 
 let pregledMode="sedmica";
 let pon0=monday(iso(new Date()));
+
+function weeklyStatuses(){
+  if(!S.sedmicniStatus)S.sedmicniStatus={};
+  if(!S.sedmicniStatus[pon0])S.sedmicniStatus[pon0]={};
+  return S.sedmicniStatus[pon0];
+}
+function plannedWorkoutStatus(sid){
+  const st=weeklyStatuses()[sid];
+  if(st)return st;
+  const logs=S.dnevnik.filter(l=>monday(l.datum)===pon0 && (l.sabId===sid || l.originalSabId===sid));
+  if(logs.some(l=>l.custom))return "custom";
+  if(logs.length)return "done";
+  return "pending";
+}
+function statusLabel(st){
+  return {done:"Odrađen",custom:"Custom",skipped:"Preskočen",pending:"Nije još odrađen"}[st]||"Nije još odrađen";
+}
+
 function weeklyPlanIds(){
   if(!S.sedmicniPlan)S.sedmicniPlan={};
   const saved=S.sedmicniPlan[pon0];
@@ -534,18 +557,32 @@ function weeklyPlanIds(){
   return SAB().filter(s=>s.tip!=="Rezervni").map(s=>s.id);
 }
 function vPregledSedmica(f){
-  const all=SAB(),aktivni=weeklyPlanIds();
+  const all=SAB(),aktivni=weeklyPlanIds(),statuses=weeklyStatuses();
   const plan=planPoPodgrupi(aktivni,f),stv=stvarnoPoPodgrupi(pon0);
   const pods=PODGRUPE.filter(p=>(plan[p]||0)>0||(stv[p]||0)>0);
   const tp=Object.values(plan).reduce((a,b)=>a+b,0),ts=Object.values(stv).reduce((a,b)=>a+b,0);
+  const planned=all.filter(s=>aktivni.includes(s.id));
+  const statusOf=s=>plannedWorkoutStatus(s.id);
+  const completed=planned.filter(s=>["done","custom"].includes(statusOf(s))).length;
+  const skipped=planned.filter(s=>statusOf(s)==="skipped").length;
   $("#view").innerHTML=`<div class="card tight"><div class="row between"><button class="btn sm gh" id="pPrev">‹</button><div style="text-align:center"><b>${dmy(pon0)}</b><div class="sm mute">nedelja od ponedeljka</div></div><button class="btn sm gh" id="pNext">›</button></div></div>
   <div class="card"><div class="xs" style="margin-bottom:8px">Plan ove nedelje</div>
     <div class="row" style="gap:7px;flex-wrap:wrap">${all.map(s=>`<button class="chip ${aktivni.includes(s.id)?"on":""}" data-wplan="${s.id}">${aktivni.includes(s.id)?"✓ ":""}${esc(s.naziv)}</button>`).join("")}</div>
-    <div class="sm mute" style="margin-top:8px">Označi samo treninge koji se računaju u plan za ovu nedelju. Izbor ostaje sačuvan za ovu nedelju.</div>
+    <div class="sm mute" style="margin-top:8px">Označi treninge koji su planirani za ovu nedelju.</div>
   </div>
+  ${planned.length?`<div class="xs" style="margin:16px 0 8px">Realizacija plana</div><div class="list">${planned.map(s=>{const st=statusOf(s);return `<div class="card tight">
+    <div class="row between"><div><b>${esc(s.naziv)}</b><div class="sm mute">${statusLabel(st)}</div></div>
+      <select data-wstatus="${s.id}" style="width:auto;max-width:150px;padding:7px 8px">
+        <option value="pending" ${st==="pending"?"selected":""}>Nije još</option>
+        <option value="done" ${st==="done"?"selected":""}>Odrađen</option>
+        <option value="custom" ${st==="custom"?"selected":""}>Custom</option>
+        <option value="skipped" ${st==="skipped"?"selected":""}>Preskočen</option>
+      </select>
+    </div></div>`}).join("")}</div>
+    <div class="card"><div class="row between"><div><div class="xs">Realizacija treninga</div><div class="num" style="font-size:28px">${completed}<span class="mute" style="font-size:17px"> / ${planned.length}</span></div></div><div class="sm mute" style="text-align:right">${skipped?`${skipped} preskočen${skipped===1?"":"a"}`:"Bez preskočenih"}</div></div></div>`:""}
   <div class="card"><div class="row between" style="align-items:flex-end"><div><div class="xs">Ukupno serija</div><div class="num" style="font-size:34px;line-height:1.1">${ts}<span class="mute" style="font-size:19px;font-weight:700"> / ${tp}</span></div></div><div style="text-align:right"><div class="xs">Treninga</div><div class="num" style="font-size:22px">${new Set(S.dnevnik.filter(l=>monday(l.datum)===pon0).map(l=>l.datum)).size}</div></div></div><div class="bar" style="margin-top:12px"><i class="${ts>=tp?"full":""}" style="width:${tp?Math.min(100,ts/tp*100):0}%"></i></div></div>
   <div class="xs" style="margin:16px 0 8px">Po podgrupama</div><div class="list">${pods.map(p=>{const P=plan[p]||0,Z=stv[p]||0,pct=P?Math.min(100,Z/P*100):(Z?100:0);const cls=P&&Z>P?"over":(P&&Z>=P?"full":"");return `<div class="card tight"><div class="row between"><div class="grow trunc">${esc(p)}</div><div class="num sm">${Z}<span class="mute"> / ${P}</span></div></div><div class="bar" style="margin-top:8px"><i class="${cls}" style="width:${pct}%"></i></div></div>`}).join("")}</div>
-  <div class="sm mute" style="margin-top:12px">Plan je zbir označenih treninga za ovu nedelju i tekuću fazu.</div>`;
+  <div class="sm mute" style="margin-top:12px">Custom se računa kao realizovan planirani trening; preskočen ostaje zabilježen. Volumen uvijek prikazuje stvarno odrađene setove.</div>`;
   $("#pPrev").onclick=()=>{const d=new Date(pon0+"T00:00:00");d.setDate(d.getDate()-7);pon0=iso(d);render()};
   $("#pNext").onclick=()=>{const d=new Date(pon0+"T00:00:00");d.setDate(d.getDate()+7);pon0=iso(d);render()};
   $("#view").querySelectorAll("[data-wplan]").forEach(b=>b.onclick=()=>{
@@ -553,6 +590,11 @@ function vPregledSedmica(f){
     const cur=weeklyPlanIds().slice(),id=b.dataset.wplan,i=cur.indexOf(id);
     if(i>=0)cur.splice(i,1);else cur.push(id);
     S.sedmicniPlan[pon0]=cur;save();render();
+  });
+  $("#view").querySelectorAll("[data-wstatus]").forEach(sel=>sel.onchange=()=>{
+    const id=sel.dataset.wstatus;
+    if(sel.value==="pending")delete statuses[id];else statuses[id]=sel.value;
+    save();render();
   });
 }
 
@@ -606,7 +648,15 @@ function vPregledMezociklus(f){
         setovi <b>${delta(a.sets,b.sets)>=0?"+":""}${delta(a.sets,b.sets)}%</b> · volumen <b>${delta(a.vol,b.vol)>=0?"+":""}${delta(a.vol,b.vol)}%</b></div>`:
         `<div class="sm mute" style="margin-top:12px">Nema prethodnog mezociklusa za poređenje.</div>`}
     </div>
-    <div class="xs" style="margin:16px 0 8px">Setovi po grupama</div>
+    ${(()=>{
+      let plannedN=0,doneN=0,customN=0,skipN=0;
+      const wp=S.sedmicniPlan||{},ws=S.sedmicniStatus||{};
+      Object.entries(wp).forEach(([wk,ids])=>{
+        if(wk<(c.pocetak||"")||wk>(c.kraj||"9999-12-31"))return;
+        ids.forEach(id=>{plannedN++;const st=(ws[wk]||{})[id]||"pending";if(st==="done")doneN++;if(st==="custom"){doneN++;customN++}if(st==="skipped")skipN++});
+      });
+      return plannedN?`<div class="xs" style="margin:16px 0 8px">Realizacija mezociklusa</div><div class="card"><div class="num" style="font-size:28px">${doneN}<span class="mute" style="font-size:17px"> / ${plannedN}</span></div><div class="sm mute">${customN} Custom · ${skipN} preskočeno</div></div>`:"";
+    })()}<div class="xs" style="margin:16px 0 8px">Setovi po grupama</div>
     <div class="list">${Object.entries(a.groups).sort((x,y)=>y[1]-x[1]).map(([g,n])=>`
       <div class="card tight"><div class="row between"><span>${esc(g)}</span><b class="num">${n}</b></div></div>`).join("")||`<div class="empty">Još nema treninga u ovom ciklusu.</div>`}</div>`;
   bindPregledTabs();
