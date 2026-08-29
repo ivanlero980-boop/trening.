@@ -395,7 +395,7 @@ function vDanas(f){
         const g=GRUPA[vpod(x.vezbaId)]||vpod(x.vezbaId);
         ciljevi[g]=(ciljevi[g]||0)+planSerija(x,f);
       });
-      sesija={datum:$("#dDatum").value,sabId:real.id,custom:true,ciljevi,stavke:[]};
+      sesija={datum:$("#dDatum").value,sabId:real.id,custom:true,startTs:Date.now(),ciljevi,stavke:[]};
       render();
     };
     $("#dStart").onclick=()=>{
@@ -513,7 +513,12 @@ function finishWorkout(sab){
     exerciseDone.push({vezbaId:s.vezbaId,sets,plan:s.plan,ponTarget:s.pon});
   });
   if(!records.length){toast("Nema odrađenih setova");return}
-  S.dnevnik.push(...records);save();
+  S.dnevnik.push(...records);
+  const wk=monday(session.datum);
+  if(!S.sedmicniStatus)S.sedmicniStatus={};
+  if(!S.sedmicniStatus[wk])S.sedmicniStatus[wk]={};
+  if(session.sabId)S.sedmicniStatus[wk][session.sabId]=session.custom?"custom":"done";
+  save();
   const dur=Math.max(1,Math.round((Date.now()-(session.startTs||Date.now()))/60000)),planAll=session.stavke.reduce((a,s)=>a+Number(s.plan||0),0),actual=records.length,volume=records.reduce((a,l)=>a+(l.kg!=null&&l.pon?Number(l.kg)*Number(l.pon):0),0);
   const progress=[];
   exerciseDone.forEach(x=>{
@@ -524,11 +529,6 @@ function finishWorkout(sab){
     if(a.kg>b.kg)progress.push(`${vname(x.vezbaId)} · +${(a.kg-b.kg).toFixed(1).replace('.0','')} kg`);
     else if(a.kg===b.kg&&a.pon>b.pon)progress.push(`${vname(x.vezbaId)} · +${a.pon-b.pon} pon. na ${a.kg||"istoj"}${a.kg?" kg":""}`);
   });
-
-  const wk=monday(session.datum);
-  if(!S.sedmicniStatus)S.sedmicniStatus={};
-  if(!S.sedmicniStatus[wk])S.sedmicniStatus[wk]={};
-  if(session.sabId)S.sedmicniStatus[wk][session.sabId]=session.custom?"custom":"done";
 
   const prs=[],advice=[];
   exerciseDone.forEach(x=>{
@@ -592,12 +592,38 @@ function weeklyStatuses(){
   if(!S.sedmicniStatus[pon0])S.sedmicniStatus[pon0]={};
   return S.sedmicniStatus[pon0];
 }
+function inferLegacyWorkoutIdsForWeek(){
+  const result={};
+  const planned=weeklyPlanIds(),templates=SAB().filter(s=>planned.includes(s.id));
+  const rows=S.dnevnik.filter(l=>monday(l.datum)===pon0);
+  const dates=[...new Set(rows.map(l=>l.datum))].sort();
+  const used=new Set();
+  dates.forEach(d=>{
+    const day=rows.filter(l=>l.datum===d);
+    // New records already identify their template exactly.
+    const explicit=day.find(l=>l.sabId||l.originalSabId);
+    if(explicit){used.add(explicit.originalSabId||explicit.sabId);return}
+    const ex=new Set(day.map(l=>l.vezbaId));
+    let best=null,bestScore=0;
+    templates.forEach(s=>{
+      if(used.has(s.id))return;
+      const sx=new Set((s.stavke||[]).map(x=>x.vezbaId));
+      const common=[...ex].filter(id=>sx.has(id)).length;
+      const score=common/Math.max(1,new Set([...ex,...sx]).size);
+      if(score>bestScore){bestScore=score;best=s}
+    });
+    // Conservative threshold: enough overlap to avoid inventing a match.
+    if(best && bestScore>=0.45){result[best.id]=d;used.add(best.id)}
+  });
+  return result;
+}
 function plannedWorkoutStatus(sid){
   const st=weeklyStatuses()[sid];
   if(st)return st;
   const logs=S.dnevnik.filter(l=>monday(l.datum)===pon0 && (l.sabId===sid || l.originalSabId===sid));
   if(logs.some(l=>l.custom))return "custom";
   if(logs.length)return "done";
+  if(inferLegacyWorkoutIdsForWeek()[sid])return "done";
   return "pending";
 }
 function statusLabel(st){
