@@ -1,0 +1,37 @@
+{
+
+  "id": "./",
+
+  "name": "Trening",
+
+  "short_name": "Trening",
+
+  "start_url": "./",
+
+  "scope": "./",
+
+  "display": "standalone",
+
+  "background_color": "#101317",
+
+  "theme_color": "#101317",
+
+  "orientation": "portrait",
+
+  "icons": [
+
+    {
+
+      "src": "./icon.png",
+
+      "sizes": "512x512",
+
+      "type": "image/png",
+
+      "purpose": "any maskable"
+
+    }
+
+  ]
+
+}
