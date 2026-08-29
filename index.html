@@ -310,7 +310,8 @@ function vDanas(f){
             <span id="dateText">${dmy(iso(new Date()))}</span>
             <input type="date" id="dDatum" value="${iso(new Date())}" aria-label="Datum treninga">
           </div></label><label class="f"><span class="sm mute">Trening iz programa</span><select id="dSab">${SAB().map(s=>`<option value="${s.id}">${esc(s.naziv)}</option>`).join("")}</select></label><button class="btn pri" style="width:100%" id="dStart">Otvori trening</button>
-        <button class="btn gh" style="width:100%;margin-top:8px" id="dCustom">Custom / Putni trening</button><div class="sm mute" style="margin-top:10px">Jedan red = jedan radni set. Težina se unapred preuzima iz poslednjeg treninga; upis ponavljanja označava da je set odrađen.</div></div>${zadnjiTreninzi()}`;
+        <button class="btn gh" style="width:100%;margin-top:8px" id="dCustom">Custom / Putni trening</button><div class="sm mute" style="margin-top:10px">Jedan red = jedan radni set. Težina se unapred preuzima iz poslednjeg treninga; upis ponavljanja označava da je set odrađen.</div></div>${bodyDue()?`<div class="card tight" style="border-color:var(--amber)"><div class="row between"><div><b>Vrijeme je za novo mjerenje osnovnih podataka</b><div class="sm mute">Prošlo je 6 mjeseci od posljednjeg unosa.</div></div><button class="btn sm gh" id="bodyGo">Otvori</button></div></div>`:""}${zadnjiTreninzi()}`;
+    const bg=$("#bodyGo");if(bg)bg.onclick=()=>{pregledMode="tijelo";go("pregled")};
     const dateInput=$("#dDatum"),dateText=$("#dateText");
     if(dateInput&&dateText){
       dateInput.onchange=()=>{if(dateInput.value)dateText.textContent=dmy(dateInput.value)};
@@ -515,8 +516,8 @@ function vPregledSedmica(f){const aktivni=SAB().filter(s=>s.tip!=="Rezervni").ma
 
 function pregledTabs(){
   return `<div class="card tight" style="padding:6px">
-    <div class="g3" style="gap:5px">
-      ${[["sedmica","Sedmica"],["mezociklus","Mezociklus"],["vezba","Vježba"]].map(([k,n])=>
+    <div class="g4" style="gap:5px">
+      ${[["sedmica","Sedmica"],["mezociklus","Mezociklus"],["vezba","Vježba"],["tijelo","Tijelo"]].map(([k,n])=>
         `<button class="btn sm ${pregledMode===k?"pri":"gh"}" data-pmode="${k}">${n}</button>`).join("")}
     </div>
   </div>`;
@@ -527,6 +528,7 @@ function bindPregledTabs(){
 function vPregled(f){
   if(pregledMode==="mezociklus")return vPregledMezociklus(f);
   if(pregledMode==="vezba")return vPregledVezba(f);
+  if(pregledMode==="tijelo")return vPregledTijelo(f);
   vPregledSedmica(f);
   $("#view").insertAdjacentHTML("afterbegin",pregledTabs());
   bindPregledTabs();
@@ -587,6 +589,75 @@ function vPregledVezba(f){
       return `<div class="card tight"><div class="row between"><div><b>${dmy(d)}</b><div class="sm mute">${sets} setova</div></div><b class="num">${kg?kg+" kg":"bez tega"}</b></div></div>`}).join("")}</div>`:""}`;
   bindPregledTabs();
   const sel=$("#progV");if(sel)sel.onchange=()=>{CTX.progressVid=sel.value;render()};
+}
+
+
+function bodyRows(){
+  if(!Array.isArray(S.tijelo))S.tijelo=[];
+  return S.tijelo.slice().sort((a,b)=>a.datum.localeCompare(b.datum));
+}
+function monthsSince(a,b){
+  if(!a||!b)return 0;
+  const x=new Date(a+"T12:00:00"),y=new Date(b+"T12:00:00");
+  return (y.getFullYear()-x.getFullYear())*12+(y.getMonth()-x.getMonth())+(y.getDate()>=x.getDate()?0:-1);
+}
+function bodyDue(){
+  const a=bodyRows();if(!a.length)return false;
+  return monthsSince(a[a.length-1].datum,iso(new Date()))>=6;
+}
+function bodyDelta(a,b,k,unit){
+  const x=Number(a?.[k]),y=Number(b?.[k]);
+  if(!Number.isFinite(x)||!Number.isFinite(y))return "";
+  const d=x-y;
+  return `${d>0?"+":""}${d.toFixed(1)} ${unit}`;
+}
+function vPregledTijelo(f){
+  const rows=bodyRows(),last=rows[rows.length-1],prev=rows[rows.length-2];
+  const fields=[
+    ["kg","Težina","kg"],["fat","Procjena masti","%"],["struk","Struk","cm"],
+    ["grudi","Grudi","cm"],["ruka","Nadlaktica","cm"],["butina","Butina","cm"]
+  ];
+  $("#view").innerHTML=pregledTabs()+`
+    ${bodyDue()?`<div class="card" style="border-color:var(--amber)"><b>Vrijeme je za novo mjerenje</b><div class="sm mute" style="margin-top:4px">Prošlo je 6 mjeseci od posljednjeg unosa osnovnih podataka.</div></div>`:""}
+    <div class="card">
+      <div class="row between"><div><div class="xs">Praćenje tijela</div><h2 style="font-size:20px;margin:3px 0">${last?dmy(last.datum):"Još nema mjerenja"}</h2></div>
+      <button class="btn pri sm" id="bodyAdd">${last?"Novi unos":"Prvi unos"}</button></div>
+      ${last?`<div class="g3" style="margin-top:12px">${fields.slice(0,3).map(([k,n,u])=>`
+        <div><div class="num" style="font-size:22px">${last[k]!==""&&last[k]!=null?esc(last[k]):"—"}</div><div class="sm mute">${n}${last[k]!==""&&last[k]!=null?" "+u:""}</div>${prev&&last[k]!==""&&prev[k]!==""?`<div class="xs">${bodyDelta(last,prev,k,u)}</div>`:""}</div>`).join("")}</div>`:""}
+    </div>
+    ${rows.length>1?`<div class="xs" style="margin:16px 0 8px">Trend težine</div><div class="card">${chart(rows.filter(x=>Number(x.kg)>0).map(x=>Number(x.kg)))}</div>`:""}
+    <div class="xs" style="margin:16px 0 8px">Istorija mjerenja</div>
+    <div class="list">${rows.slice().reverse().map(x=>`<div class="card tight">
+      <div class="row between"><b>${dmy(x.datum)}</b><button class="btn sm gh danger" data-bdel="${x.id}">✕</button></div>
+      <div class="sm mute" style="margin-top:5px">${fields.filter(([k])=>x[k]!==""&&x[k]!=null).map(([k,n,u])=>`${n}: ${esc(x[k])} ${u}`).join(" · ")||"Bez unijetih mjera"}</div>
+    </div>`).join("")||`<div class="empty">Unesi početno mjerenje. Sljedeća napomena će se pojaviti nakon 6 mjeseci.</div>`}</div>`;
+  bindPregledTabs();
+  $("#bodyAdd").onclick=()=>bodyDialog();
+  $("#view").querySelectorAll("[data-bdel]").forEach(b=>b.onclick=()=>{
+    if(!confirm("Obrisati ovo mjerenje?"))return;
+    S.tijelo=S.tijelo.filter(x=>x.id!==b.dataset.bdel);save();render();
+  });
+}
+function bodyDialog(){
+  openDlg(`<div class="xs">Osnovni podaci</div><h2 style="font-size:21px;margin:4px 0 12px">Novo mjerenje</h2>
+    <label class="f"><span class="sm mute">Datum</span><input type="date" id="bmDatum" value="${iso(new Date())}"></label>
+    <div class="g2">
+      <label class="f"><span class="sm mute">Težina (kg)</span><input id="bmKg" inputmode="decimal"></label>
+      <label class="f"><span class="sm mute">Procjena masti (%)</span><input id="bmFat" inputmode="decimal"></label>
+      <label class="f"><span class="sm mute">Struk (cm)</span><input id="bmStruk" inputmode="decimal"></label>
+      <label class="f"><span class="sm mute">Grudi (cm)</span><input id="bmGrudi" inputmode="decimal"></label>
+      <label class="f"><span class="sm mute">Nadlaktica (cm)</span><input id="bmRuka" inputmode="decimal"></label>
+      <label class="f"><span class="sm mute">Butina (cm)</span><input id="bmButina" inputmode="decimal"></label>
+    </div>
+    <div class="sm mute" style="margin-top:8px">Sva mjerenja osim datuma su opciona.</div>
+    <div class="btnrow"><button class="btn gh" onclick="closeDlg()">Otkaži</button><button class="btn pri" id="bmSave">Sačuvaj</button></div>`);
+  $("#bmSave").onclick=()=>{
+    const val=id=>{const s=$(id).value.trim().replace(",",".");return s===""?"":Number(s)};
+    const datum=$("#bmDatum").value;if(!datum){toast("Unesi datum");return}
+    if(!Array.isArray(S.tijelo))S.tijelo=[];
+    S.tijelo.push({id:uid(),datum,kg:val("#bmKg"),fat:val("#bmFat"),struk:val("#bmStruk"),grudi:val("#bmGrudi"),ruka:val("#bmRuka"),butina:val("#bmButina")});
+    save();closeDlg();render();toast("Mjerenje sačuvano");
+  };
 }
 
 function vProgram(f){if(CTX.sab)return editSablon(CTX.sab,f);const sabs=SAB();$("#view").innerHTML=volumeProgramCard()+`<div class="xs" style="margin:16px 0 8px">Treninzi u programu</div><div class="list">${sabs.map(s=>{const uk=s.stavke.reduce((a,x)=>a+planSerija(x,f),0);return `<div class="card tight" data-open="${s.id}" style="cursor:pointer"><div class="row between"><div class="grow"><b>${esc(s.naziv)}</b><div class="sm mute">${s.stavke.length} vežbi · ${uk} serija u ovoj fazi</div></div><span class="chip">${esc(s.tip||"—")}</span></div></div>`}).join("")}</div><button class="btn gh" style="width:100%;margin-top:10px" id="novi">+ Novi trening</button>`;$("#view").querySelectorAll("[data-open]").forEach(c=>c.onclick=()=>go("program",{sab:c.dataset.open,title:"Uredi trening"}));$("#novi").onclick=()=>{const x={id:uid(),naziv:"Novi trening",tip:"Full body",stavke:[]};SAB().push(x);save();go("program",{sab:x.id,title:"Uredi trening"})}}
