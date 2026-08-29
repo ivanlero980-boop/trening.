@@ -1032,12 +1032,13 @@ function vProgram(f){
   if(CTX.sab)return editLibraryWorkout(CTX.sab,f);
   const sabs=LIB();
   $("#view").innerHTML=`<div class="card"><div class="xs">Planiranje</div><h2 style="font-size:20px;margin-top:3px">Složi novu nedelju</h2><div class="sm mute">Izaberi koliko puta nedeljno treniraš, složi treninge i proveri balans volumena.</div><button class="btn pri" style="width:100%;margin-top:12px" id="newCycleTop">+ Novi mezociklus</button></div>
-  <div class="card"><div class="row between"><div><div class="xs">Biblioteka programa</div><h2 style="font-size:20px;margin-top:3px">${PROG().length} programa</h2><div class="sm mute">Program je sačuvana nedeljna konstrukcija koju možeš ponovo koristiti.</div></div><button class="btn gh" id="openPrograms">Otvori</button></div></div>
+  <div class="card"><div class="row between"><div><div class="xs">Biblioteka programa</div><h2 style="font-size:20px;margin-top:3px">${PROG().length} programa</h2><div class="sm mute">Program je sačuvana nedeljna konstrukcija koju možeš ponovo koristiti.</div></div><div class="btnrow"><button class="btn sm pri" id="newProgramTop">+ Novi</button><button class="btn sm gh" id="openPrograms">Otvori</button></div></div></div>
   <div class="card"><div class="xs">Biblioteka treninga</div><h2 style="font-size:20px;margin-top:3px">${sabs.length} treninga</h2><div class="sm mute">Trening napraviš jednom, a zatim ga koristiš u različitim programima i mezociklusima.</div></div>
   <div class="list">${sabs.map(s=>`<div class="card tight" data-open="${s.id}" style="cursor:pointer"><div class="row between"><div class="grow"><b>${esc(cleanWorkoutName(s.naziv))}</b><div class="sm mute">${s.stavke.length} vežbi · osnovno ${s.stavke.reduce((a,x)=>a+Number(x.b||0),0)} serija</div></div><span class="chip">${esc(s.tip||"—")}</span></div></div>`).join("")||`<div class="empty">Biblioteka je prazna.</div>`}</div>
   <button class="btn pri" style="width:100%;margin-top:10px" id="novi">+ Novi trening</button>`;
   $("#newCycleTop").onclick=newCycleDialog;
   $("#openPrograms").onclick=programLibraryDialog;
+  $("#newProgramTop").onclick=()=>newProgramDialog();
   $("#view").querySelectorAll("[data-open]").forEach(c=>c.onclick=()=>go("program",{sab:c.dataset.open,title:"Uredi trening"}));
   $("#novi").onclick=()=>{const x={id:uid(),naziv:"Novi trening",tip:"Full body",stavke:[]};S.treningBiblioteka.push(x);save();go("program",{sab:x.id,title:"Uredi trening"})};
 }
@@ -1081,15 +1082,65 @@ function openDlg2(html){
 function closeDlg2(){const d=$("#dlg2");if(d&&d.open)d.close()}
 
 
-function programLibraryDialog(){
-  const ps=PROG();
-  openDlg(`<h2 style="font-size:18px;margin-bottom:5px">Biblioteka programa</h2><div class="sm mute" style="margin-bottom:12px">Program je nedeljna struktura. Od istog programa možeš pokrenuti više mezociklusa.</div>
-  <div class="list">${ps.map(p=>`<div class="card tight"><div class="row between"><div class="grow"><b>${esc(p.naziv)}</b><div class="sm mute">${p.treningIds.length}× nedeljno · ${p.treningIds.map(id=>LIB().find(x=>x.id===id)?.naziv||"Obrisan trening").map(esc).join(" · ")}</div></div></div><div class="btnrow" style="margin-top:9px"><button class="btn sm pri" data-runprog="${p.id}">Pokreni mezociklus</button><button class="btn sm gh danger" data-delprog="${p.id}">Obriši</button></div></div>`).join("")||`<div class="empty">Još nema sačuvanih programa.</div>`}</div><button class="btn gh" style="width:100%;margin-top:10px" id="pClose">Zatvori</button>`);
-  $("#pClose").onclick=closeDlg;
-  $("#dlgBody").querySelectorAll("[data-delprog]").forEach(b=>b.onclick=()=>{const p=PROG().find(x=>x.id===b.dataset.delprog);if(confirm("Obrisati program „"+p.naziv+"”? Postojeći mezociklusi ostaju nepromenjeni.")){S.programBiblioteka=PROG().filter(x=>x.id!==p.id);save();programLibraryDialog()}});
-  $("#dlgBody").querySelectorAll("[data-runprog]").forEach(b=>{b.onclick=()=>{const p=PROG().find(x=>x.id===b.dataset.runprog);closeDlg();newCycleDialog(p)}});
+
+function newProgramDialog(existing=null){
+  const baseIds=existing?existing.treningIds.slice():Array(4).fill("");
+  openDlg(`<h2 style="font-size:18px;margin-bottom:5px">${existing?"Uredi program":"Novi program"}</h2>
+  <div class="sm mute" style="margin-bottom:14px">Program je jedna izbalansirana nedelja. Izaberi frekvenciju i treninge; volumen se računa uživo.</div>
+  <label class="f"><span class="sm mute">Naziv programa</span><input id="pbName" value="${esc(existing?.naziv||"")}"></label>
+  <div class="card"><div class="xs">1 · Frekvencija</div><div class="row" id="pbFreq" style="gap:7px;margin-top:10px">${[2,3,4,5,6].map(n=>`<button class="chip ${n===baseIds.length?"on":""}" data-pbf="${n}" style="flex:1;justify-content:center">${n}×</button>`).join("")}</div></div>
+  <div class="xs" style="margin:14px 0 8px">2 · Treninzi u nedelji</div><div id="pbSlots"></div>
+  <div class="xs" style="margin:14px 0 8px">3 · Balans nedelje</div><div id="pbVol"></div>
+  <div class="btnrow" style="margin-top:12px"><button class="btn pri grow" id="pbSave">Sačuvaj program</button><button class="btn gh" id="pbCancel">Otkaži</button></div>`);
+
+  let ids=baseIds;
+  const refresh=()=>{
+    $("#pbSlots").innerHTML=ids.map((id,i)=>{
+      const x=LIB().find(z=>z.id===id);
+      return `<div class="card tight"><div class="row between"><div class="grow"><b>Trening ${i+1}</b><div class="sm mute">${x?esc(cleanWorkoutName(x.naziv)):"Nije izabran"}</div></div><button class="btn sm gh" data-pbslot="${i}">${x?"Promeni":"Izaberi"}</button></div></div>`;
+    }).join("");
+    $("#pbSlots").querySelectorAll("[data-pbslot]").forEach(b=>b.onclick=()=>pick(+b.dataset.pbslot));
+    $("#pbVol").innerHTML=selectedLibraryVolumeCard(ids.filter(Boolean));
+  };
+  const pick=i=>{
+    openDlg2(`<h2 style="font-size:18px;margin-bottom:10px">Izaberi trening</h2><div class="list">${LIB().map(x=>`<button class="card tight" data-pbpick="${x.id}" style="width:100%;text-align:left"><b>${esc(cleanWorkoutName(x.naziv))}</b><div class="sm mute">${x.stavke.length} vežbi · ${esc(x.tip||"")}</div></button>`).join("")}</div><button class="btn gh" style="width:100%;margin-top:8px" id="pbpc">Otkaži</button>`);
+    $("#dlg2Body").querySelectorAll("[data-pbpick]").forEach(b=>b.onclick=()=>{ids[i]=b.dataset.pbpick;closeDlg2();refresh()});
+    $("#pbpc").onclick=closeDlg2;
+  };
+  $("#pbFreq").querySelectorAll("[data-pbf]").forEach(b=>b.onclick=()=>{
+    const n=Number(b.dataset.pbf);
+    $("#pbFreq").querySelectorAll("[data-pbf]").forEach(x=>x.classList.toggle("on",x===b));
+    if(n>ids.length)while(ids.length<n)ids.push("");else ids=ids.slice(0,n);
+    refresh();
+  });
+  $("#pbCancel").onclick=closeDlg;
+  $("#pbSave").onclick=()=>{
+    const name=$("#pbName").value.trim();
+    if(!name){toast("Upiši naziv programa");return}
+    if(ids.some(x=>!x)){toast("Popuni sve treninge u nedelji");return}
+    if(existing){
+      existing.naziv=name;existing.treningIds=ids.slice();existing.frekvencija=ids.length;
+    }else{
+      S.programBiblioteka.push({id:uid(),naziv:name,treningIds:ids.slice(),frekvencija:ids.length,createdAt:iso(new Date())});
+    }
+    save();closeDlg();render();toast("Program sačuvan");
+  };
+  refresh();
 }
 
+function programLibraryDialog(){
+  const ps=PROG();
+  const freqs=[2,3,4,5,6].filter(n=>ps.some(p=>(p.frekvencija||p.treningIds.length)===n));
+  openDlg(`<div class="row between" style="margin-bottom:5px"><h2 style="font-size:18px">Biblioteka programa</h2><button class="btn sm pri" id="pNew">+ Novi</button></div>
+  <div class="sm mute" style="margin-bottom:12px">Program je sačuvana nedelja. Pokretanjem programa praviš novi mezociklus, dok program ostaje u biblioteci.</div>
+  ${freqs.map(n=>`<div class="xs" style="margin:14px 0 7px">${n}× nedeljno</div>${ps.filter(p=>(p.frekvencija||p.treningIds.length)===n).map(p=>`<div class="card tight"><b>${esc(p.naziv)}</b><div class="sm mute" style="margin-top:3px">${p.treningIds.map(id=>LIB().find(x=>x.id===id)?.naziv||"Obrisan trening").map(cleanWorkoutName).map(esc).join(" · ")}</div><div class="btnrow" style="margin-top:9px"><button class="btn sm pri" data-runprog="${p.id}">Pokreni</button><button class="btn sm gh" data-editprog="${p.id}">Uredi</button><button class="btn sm gh danger" data-delprog="${p.id}">Obriši</button></div></div>`).join("")}`).join("")||`<div class="empty">Još nema sačuvanih programa.</div>`}
+  <button class="btn gh" style="width:100%;margin-top:10px" id="pClose">Zatvori</button>`);
+  $("#pClose").onclick=closeDlg;
+  $("#pNew").onclick=()=>{closeDlg();newProgramDialog()};
+  $("#dlgBody").querySelectorAll("[data-editprog]").forEach(b=>b.onclick=()=>{const p=PROG().find(x=>x.id===b.dataset.editprog);closeDlg();newProgramDialog(p)});
+  $("#dlgBody").querySelectorAll("[data-delprog]").forEach(b=>b.onclick=()=>{const p=PROG().find(x=>x.id===b.dataset.delprog);if(confirm("Obrisati program „"+p.naziv+"”? Postojeći mezociklusi ostaju nepromenjeni.")){S.programBiblioteka=PROG().filter(x=>x.id!==p.id);save();programLibraryDialog()}});
+  $("#dlgBody").querySelectorAll("[data-runprog]").forEach(b=>b.onclick=()=>{const p=PROG().find(x=>x.id===b.dataset.runprog);closeDlg();newCycleDialog(p)});
+}
 function newCycleDialog(preload=null){
   const next="M"+((S.mezociklusi||[]).length+1);
   openDlg(`<h2 style="font-size:18px;margin-bottom:5px">Novi mezociklus</h2>
