@@ -259,6 +259,33 @@ function migrateExerciseCatalog(){
 function migrateProgramLibrary(){
   if(!S)return;
   if(!Array.isArray(S.programBiblioteka))S.programBiblioteka=[];
+
+  // If the program library is empty, derive the first program from the
+  // current active mesocycle. This preserves the user's existing setup.
+  if(!S.programBiblioteka.length){
+    const c=activeCycle();
+    if(c && Array.isArray(c.sabloni) && c.sabloni.length){
+      const ids=[];
+      c.sabloni.forEach(snap=>{
+        // Match the mesocycle snapshot back to a library workout by source id,
+        // then by name as a compatibility fallback.
+        let lib=LIB().find(x=>x.id===snap.sourceLibraryId);
+        if(!lib)lib=LIB().find(x=>normName(x.naziv)===normName(snap.naziv));
+        if(lib && !ids.includes(lib.id))ids.push(lib.id);
+      });
+
+      if(ids.length){
+        const defaultName=(c.naziv||"Program")+" · "+ids.length+"× nedeljno";
+        S.programBiblioteka.push({
+          id:uid(),
+          naziv:defaultName,
+          treningIds:ids,
+          createdAt:iso(new Date()),
+          migratedFromCycleId:c.id
+        });
+      }
+    }
+  }
 }
 function PROG(){return S.programBiblioteka||[]}
 function programSnapshot(p){
@@ -271,7 +298,17 @@ function migrateWorkoutLibrary(){
     const source=(activeCycle()&&Array.isArray(activeCycle().sabloni)?activeCycle().sabloni:(S.sabloni||[]));
     S.treningBiblioteka=clone(source).map(x=>({...x,libraryId:x.libraryId||uid()}));
   }
-  S.treningBiblioteka.forEach(x=>{if(!x.libraryId)x.libraryId=uid()});S.treningBiblioteka.forEach(x=>{if(x.tip==="Rezervni")x.tip="Full body"});
+  S.treningBiblioteka.forEach(x=>{if(!x.libraryId)x.libraryId=uid()});S.treningBiblioteka.forEach(x=>{
+    if(x.tip==="Rezervni")x.tip="Full body";
+    if((x.naziv||"").trim().toLowerCase()==="rezervni")x.naziv="Full body C";
+    if(/^full body c\s*[—–-]\s*rezervni$/i.test((x.naziv||"").trim()))x.naziv="Full body C";
+  });
+  (S.mezociklusi||[]).forEach(c=>(c.sabloni||[]).forEach(x=>{
+    if(x.tip==="Rezervni")x.tip="Full body";
+    if((x.naziv||"").trim().toLowerCase()==="rezervni")x.naziv="Full body C";
+    if(/^full body c\s*[—–-]\s*rezervni$/i.test((x.naziv||"").trim()))x.naziv="Full body C";
+  }));
+
 }
 function LIB(){return S.treningBiblioteka||[]}
 function librarySnapshot(ids){
