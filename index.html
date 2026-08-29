@@ -949,9 +949,11 @@ function selectedLibraryVolumeCard(ids){
 function vProgram(f){
   if(CTX.sab)return editLibraryWorkout(CTX.sab,f);
   const sabs=LIB();
-  $("#view").innerHTML=`<div class="card"><div class="xs">Biblioteka treninga</div><h2 style="font-size:20px;margin-top:3px">${sabs.length} treninga</h2><div class="sm mute">Trening napraviš jednom, a zatim ga biraš kada kreiraš mezociklus. Izmjene ovdje ne mijenjaju stare mezocikluse.</div></div>
+  $("#view").innerHTML=`<div class="card"><div class="xs">Planiranje</div><h2 style="font-size:20px;margin-top:3px">Složi novu nedelju</h2><div class="sm mute">Izaberi koliko puta nedeljno treniraš, složi treninge i proveri balans volumena.</div><button class="btn pri" style="width:100%;margin-top:12px" id="newCycleTop">+ Novi mezociklus</button></div>
+  <div class="card"><div class="xs">Biblioteka treninga</div><h2 style="font-size:20px;margin-top:3px">${sabs.length} treninga</h2><div class="sm mute">Trening napraviš jednom, a zatim ga koristiš u različitim nedeljama i mezociklusima.</div></div>
   <div class="list">${sabs.map(s=>`<div class="card tight" data-open="${s.id}" style="cursor:pointer"><div class="row between"><div class="grow"><b>${esc(s.naziv)}</b><div class="sm mute">${s.stavke.length} vežbi · osnovno ${s.stavke.reduce((a,x)=>a+Number(x.b||0),0)} serija</div></div><span class="chip">${esc(s.tip||"—")}</span></div></div>`).join("")||`<div class="empty">Biblioteka je prazna.</div>`}</div>
   <button class="btn pri" style="width:100%;margin-top:10px" id="novi">+ Novi trening</button>`;
+  $("#newCycleTop").onclick=newCycleDialog;
   $("#view").querySelectorAll("[data-open]").forEach(c=>c.onclick=()=>go("program",{sab:c.dataset.open,title:"Uredi trening"}));
   $("#novi").onclick=()=>{const x={id:uid(),naziv:"Novi trening",tip:"Full body",stavke:[]};S.treningBiblioteka.push(x);save();go("program",{sab:x.id,title:"Uredi trening"})};
 }
@@ -998,16 +1000,17 @@ function newCycleDialog(){
   const next="M"+((S.mezociklusi||[]).length+1);
   openDlg(`<h2 style="font-size:18px;margin-bottom:5px">Novi mezociklus</h2>
   <div class="sm mute" style="margin-bottom:14px">Prvo složi nedelju. Mezociklus zatim ponavlja tu strukturu i primenjuje progresiju volumena.</div>
-  <label class="f"><span class="sm mute">Treninga nedeljno</span><select id="mFreq">${[2,3,4,5,6].map(n=>`<option ${n===3?"selected":""} value="${n}">${n}× nedeljno</option>`).join("")}</select></label>
+  <div class="card"><div class="xs">1 · Frekvencija</div><h2 style="font-size:19px;margin-top:4px">Koliko puta nedeljno želiš da treniraš?</h2><div class="row" id="freqBtns" style="gap:7px;margin-top:12px">${[2,3,4,5,6].map(n=>`<button class="chip ${n===3?"on":""}" data-freq="${n}" style="flex:1;justify-content:center">${n}×</button>`).join("")}</div></div>
+  <div class="xs" style="margin:14px 0 8px">2 · Treninzi u nedelji</div>
   <div id="weekSlots"></div>
-  <div id="mVolWrap"></div>
-  <hr class="sep">
+  <div class="xs" style="margin:14px 0 8px">3 · Balans nedelje</div><div id="mVolWrap"></div>
+  <hr class="sep"><div class="xs" style="margin-bottom:8px">4 · Mezociklus</div>
   <label class="f"><span class="sm mute">Naziv mezociklusa</span><input id="mN" value="${esc(next)}"></label>
   <div class="g2"><label class="f"><span class="sm mute">Prvi ponedeljak</span><input type="date" id="mP" value="${monday(iso(new Date()))}"></label><label class="f"><span class="sm mute">Trajanje</span><select id="mT">${[6,7,8,9,10,12].map(n=>`<option ${n===9?"selected":""} value="${n}">${n} nedelja</option>`).join("")}</select></label></div>
   <div class="sm mute" style="margin:2px 0 12px">Nedelja definiše šta treniraš; mezociklus definiše kako volumen raste kroz vreme.</div>
   <div class="btnrow"><button class="btn pri grow" id="mS">Kreiraj mezociklus</button><button class="btn gh" id="mC">Otkaži</button></div>`);
 
-  let weekIds=Array(Number($("#mFreq").value)).fill("");
+  let weekIds=Array(3).fill("");
   const renderSlots=()=>{
     const wrap=$("#weekSlots");
     wrap.innerHTML=`<div class="xs" style="margin:4px 0 8px">Nedeljna struktura</div>${weekIds.map((id,i)=>{
@@ -1030,7 +1033,12 @@ function newCycleDialog(){
     $("#nwCancel").onclick=closeDlg2;
     $("#nwSave").onclick=()=>{const name=$("#nwName").value.trim();if(!name){toast("Upiši naziv");return}const x={id:uid(),naziv:name,tip:$("#nwType").value,stavke:[]};S.treningBiblioteka.push(x);save();weekIds[i]=x.id;closeDlg2();renderSlots();toast("Trening dodat u biblioteku")};
   };
-  $("#mFreq").onchange=()=>{const n=Number($("#mFreq").value);if(n>weekIds.length)while(weekIds.length<n)weekIds.push("");else weekIds=weekIds.slice(0,n);renderSlots()};
+  $("#freqBtns").querySelectorAll("[data-freq]").forEach(b=>b.onclick=()=>{
+    const n=Number(b.dataset.freq);
+    $("#freqBtns").querySelectorAll("[data-freq]").forEach(x=>x.classList.toggle("on",x===b));
+    if(n>weekIds.length)while(weekIds.length<n)weekIds.push("");else weekIds=weekIds.slice(0,n);
+    renderSlots();
+  });
   $("#mC").onclick=closeDlg;
   $("#mS").onclick=()=>{
     if(weekIds.some(x=>!x)){toast("Popuni sve treninge u nedelji");return}
