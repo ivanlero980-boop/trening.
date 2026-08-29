@@ -240,8 +240,21 @@ function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("show");cl
 let S=null;
 function load(){try{const raw=localStorage.getItem(KEY);if(raw){S=JSON.parse(raw);return}}catch(e){}S=seed();save()}
 function activeCycle(){return S&&Array.isArray(S.mezociklusi)?S.mezociklusi.find(c=>c.id===S.aktivniMezociklusId)||S.mezociklusi.find(c=>c.status==="aktivan")||S.mezociklusi[S.mezociklusi.length-1]:null}
-function SAB(){const c=activeCycle();return c&&Array.isArray(c.sabloni)?c.sabloni:(S.sabloni||[])}
-function syncLegacy(){const c=activeCycle();if(!c)return;S.ciklus={naziv:c.naziv,pocetak:c.pocetak,nedelja:c.trajanje||9};S.sabloni=c.sabloni}
+function liveWorkout(snap){
+  if(!snap)return snap;
+  let lib=null;
+  if(snap.sourceLibraryId)lib=LIB().find(x=>x.id===snap.sourceLibraryId);
+  if(!lib)lib=LIB().find(x=>normName(cleanWorkoutName(x.naziv))===normName(cleanWorkoutName(snap.naziv)));
+  if(!lib)return snap;
+  // Keep the mesocycle snapshot id so weekly plans/history still identify the same slot,
+  // but use the current library definition for name/type/exercises.
+  return {...clone(lib),id:snap.id,sourceLibraryId:lib.id};
+}
+function SAB(){
+  const c=activeCycle();
+  return c&&Array.isArray(c.sabloni)?c.sabloni.map(liveWorkout):(S.sabloni||[]);
+}
+function syncLegacy(){const c=activeCycle();if(!c)return;S.ciklus={naziv:c.naziv,pocetak:c.pocetak,nedelja:c.trajanje||9};S.sabloni=clone(c.sabloni)}
 function save(){try{syncLegacy();localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast("Nije uspelo čuvanje")}}
 function normName(s){return String(s||"").trim().toLocaleLowerCase("sr")}
 function clone(x){return JSON.parse(JSON.stringify(x))}
@@ -541,7 +554,7 @@ function vDanas(f){
     $("#dStart").onclick=()=>{
       const real=SAB().find(x=>x.id===$("#dSab").value);if(!real){toast("Trening nije pronađen");return}
       const datum=$("#dDatum").value;
-      sesija={datum,sabId:real.id,startTs:Date.now(),stavke:real.stavke.map(s=>{const plan=planSerija(s,f);return{vezbaId:s.vezbaId,plan,pon:s.pon,odmor:s.odmor,unosi:makeSetRows(s.vezbaId,plan,datum)}})};
+      sesija={datum,sabId:real.id,sourceLibraryId:real.sourceLibraryId||"",startTs:Date.now(),stavke:real.stavke.map(s=>{const plan=planSerija(s,f);return{vezbaId:s.vezbaId,plan,pon:s.pon,odmor:s.odmor,unosi:makeSetRows(s.vezbaId,plan,datum)}})};
       render();
     };
     return;
