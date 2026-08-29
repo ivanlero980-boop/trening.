@@ -114,6 +114,22 @@ nav button .ic svg{
   padding:0;
 }
 
+
+.pregledSegments{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:4px;
+  width:100%;
+}
+.pregledSegments .btn{
+  width:100%;
+  min-width:0;
+  padding:9px 3px;
+  font-size:12px;
+  line-height:1.1;
+  white-space:nowrap;
+}
+
 </style>
 </head>
 <body>
@@ -516,7 +532,7 @@ function vPregledSedmica(f){const aktivni=SAB().filter(s=>s.tip!=="Rezervni").ma
 
 function pregledTabs(){
   return `<div class="card tight" style="padding:6px">
-    <div class="g4" style="gap:5px">
+    <div class="pregledSegments">
       ${[["sedmica","Sedmica"],["mezociklus","Mezociklus"],["vezba","Vježba"],["tijelo","Tijelo"]].map(([k,n])=>
         `<button class="btn sm ${pregledMode===k?"pri":"gh"}" data-pmode="${k}">${n}</button>`).join("")}
     </div>
