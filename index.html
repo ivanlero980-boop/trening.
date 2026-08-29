@@ -350,24 +350,96 @@ function vDanas(f){
   $("#odustani").onclick=()=>{if(confirm("Odbaciti ovaj trening?")){sesija=null;render()}};
   $("#dodajVezbu").onclick=()=>pickVezba(null,id=>{sesija.stavke.push({vezbaId:id,plan:3,pon:"",odmor:"",unosi:makeSetRows(id,3,sesija.datum)});render()});
   $("#sacuvaj").onclick=()=>finishWorkout(sab);
-  v.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>{const s=sesija.stavke[+b.dataset.add],last=s.unosi[s.unosi.length-1];s.unosi.push({kg:last?.kg??lastKg(s.vezbaId),pon:"",nap:""});CTX.keepScroll=1;render();CTX.keepScroll=0});
+  v.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>{const s=sesija.stavke[+b.dataset.add],last=s.unosi[s.unosi.length-1];s.unosi.push({kg:last?.kg??lastKg(s.vezbaId),pon:"",nap:"",rir:""});CTX.keepScroll=1;render();CTX.keepScroll=0});
   v.querySelectorAll("[data-same]").forEach(b=>b.onclick=()=>{const[i,j]=b.dataset.same.split(":").map(Number),rows=sesija.stavke[i].unosi;if(j<1)return;rows[j].kg=rows[j-1].kg;rows[j].pon=rows[j-1].pon;CTX.keepScroll=1;render();CTX.keepScroll=0});
   v.querySelectorAll("[data-swap]").forEach(b=>b.onclick=()=>{const i=+b.dataset.swap;pickVezba(vpod(sesija.stavke[i].vezbaId),id=>{const s=sesija.stavke[i];s.vezbaId=id;s.unosi=makeSetRows(id,s.plan,sesija.datum);render()})});
   v.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{const[i,j]=b.dataset.del.split(":").map(Number);sesija.stavke[i].unosi.splice(j,1);CTX.keepScroll=1;render();CTX.keepScroll=0});
+
+  v.querySelectorAll("[data-rir]").forEach(b=>b.onclick=()=>{
+    const [i,j,r]=b.dataset.rir.split(":");
+    const u=sesija.stavke[+i].unosi[+j];
+    u.rir=(u.rir===r?"":r);
+    CTX.keepScroll=1;render();CTX.keepScroll=0;
+  });
+
   v.querySelectorAll("input[data-f]").forEach(inp=>inp.oninput=()=>{const[i,j,k]=inp.dataset.f.split(":");sesija.stavke[+i].unosi[+j][k]=inp.value});
 }
 function lastKg(vid){const l=S.dnevnik.filter(x=>x.vezbaId===vid).sort((a,b)=>a.datum<b.datum?1:-1)[0];return l&&l.kg!=null?l.kg:""}
 function kartStavka(s,i){
   const done=completedSets(s).length;
-  return `<div class="card"><div class="row between"><div class="grow"><b class="trunc">${esc(vname(s.vezbaId))}</b><div class="sm mute">${esc(vpod(s.vezbaId))} · plan ${s.plan} ${s.pon?"× "+esc(s.pon):""} ${s.odmor?"· "+esc(s.odmor):""}</div></div><div class="num" style="font-size:19px;color:${done>=s.plan?"var(--ok)":"var(--mute)"}">${done}/${s.plan}</div></div><div class="sm mute" style="margin-top:7px">${esc(previousWorkoutLabel(s.vezbaId,sesija.datum))}</div><div style="margin-top:9px">${s.unosi.map((u,j)=>`<div class="setline"><span class="num mute" style="width:22px;text-align:center">${j+1}</span><input data-f="${i}:${j}:kg" value="${esc(u.kg)}" inputmode="decimal" placeholder="kg" aria-label="Težina set ${j+1}" style="width:84px;padding:8px"><span class="mute sm">×</span><input data-f="${i}:${j}:pon" value="${esc(u.pon)}" inputmode="numeric" placeholder="pon" aria-label="Ponavljanja set ${j+1}" style="width:72px;padding:8px">${j?`<button class="btn sm gh" data-same="${i}:${j}" aria-label="Isto kao prethodni set">↳</button>`:""}<button class="btn sm gh danger" data-del="${i}:${j}" aria-label="Obriši">✕</button></div>`).join("")}</div><div class="btnrow" style="margin-top:10px"><button class="btn sm" data-add="${i}">+ Set</button><button class="btn sm gh" data-swap="${i}">Zameni vežbu</button></div></div>`;
+  return `<div class="card"><div class="row between"><div class="grow"><b class="trunc">${esc(vname(s.vezbaId))}</b><div class="sm mute">${esc(vpod(s.vezbaId))} · plan ${s.plan} ${s.pon?"× "+esc(s.pon):""} ${s.odmor?"· "+esc(s.odmor):""}</div></div><div class="num" style="font-size:19px;color:${done>=s.plan?"var(--ok)":"var(--mute)"}">${done}/${s.plan}</div></div><div class="sm mute" style="margin-top:7px">${esc(previousWorkoutLabel(s.vezbaId,sesija.datum))}</div><div style="margin-top:9px">${s.unosi.map((u,j)=>`<div class="setline"><span class="num mute" style="width:22px;text-align:center">${j+1}</span><input data-f="${i}:${j}:kg" value="${esc(u.kg)}" inputmode="decimal" placeholder="kg" aria-label="Težina set ${j+1}" style="width:84px;padding:8px"><span class="mute sm">×</span><input data-f="${i}:${j}:pon" value="${esc(u.pon)}" inputmode="numeric" placeholder="pon" aria-label="Ponavljanja set ${j+1}" style="width:72px;padding:8px">${j?`<button class="btn sm gh" data-same="${i}:${j}" aria-label="Isto kao prethodni set">↳</button>`:""}<button class="btn sm gh danger" data-del="${i}:${j}" aria-label="Obriši">✕</button></div>
+      <div class="row" style="gap:6px;margin:2px 0 7px 30px">
+        <span class="xs" style="min-width:28px">RIR</span>
+        ${["0–1","2","3","4+"].map(r=>`<button class="chip ${u.rir===r?"on":""}" data-rir="${i}:${j}:${r}" type="button">${r}</button>`).join("")}
+      </div>`).join("")}</div><div class="btnrow" style="margin-top:10px"><button class="btn sm" data-add="${i}">+ Set</button><button class="btn sm gh" data-swap="${i}">Zameni vežbu</button></div></div>`;
 }
+
+function parseRepRange(s){
+  const m=String(s||"").match(/(\d+)\s*[–-]\s*(\d+)/);
+  if(m)return {lo:Number(m[1]),hi:Number(m[2])};
+  const one=String(s||"").match(/(\d+)/);
+  return one?{lo:Number(one[1]),hi:Number(one[1])}:null;
+}
+function rirValue(r){
+  if(r==="0–1")return 1;
+  if(r==="2")return 2;
+  if(r==="3")return 3;
+  if(r==="4+")return 4;
+  return null;
+}
+function bestSet(rows){
+  return rows.reduce((b,z)=>{
+    const kg=Number(z.kg)||0,pon=Number(z.pon)||0;
+    const score=kg*1000+pon;
+    return score>b.score?{kg,pon,score}:b;
+  },{kg:0,pon:0,score:-1});
+}
+function isNewPR(vid,sessionDate,curSets){
+  const prev=S.dnevnik.filter(x=>x.vezbaId===vid&&x.datum<sessionDate);
+  if(!prev.length)return false;
+  const a=bestSet(curSets),b=bestSet(prev);
+  return a.kg>b.kg || (a.kg===b.kg && a.pon>b.pon);
+}
+function progressionAdvice(item,sessionDate,f){
+  const rr=parseRepRange(item.ponTarget||"");
+  if(!rr)return null;
+  const sets=item.sets||[];
+  if(!sets.length)return null;
+
+  const reps=sets.map(x=>Number(x.pon)||0);
+  const avgRirVals=sets.map(x=>rirValue(x.rir)).filter(x=>x!=null);
+  const avgRir=avgRirVals.length?avgRirVals.reduce((a,b)=>a+b,0)/avgRirVals.length:null;
+  const allTop=reps.every(r=>r>=rr.hi);
+  const mostlyLow=reps.filter(r=>r<rr.lo).length>=Math.ceil(reps.length/2);
+  const atLeastLow=reps.every(r=>r>=rr.lo);
+
+  // Deload: never push progression.
+  if(f && String(f.ime||"").toLowerCase().includes("deload")){
+    return `${vname(item.vezbaId)} — zadrži ili smanji opterećenje; deload nedjelja.`;
+  }
+
+  if(allTop && (avgRir==null || avgRir>=2)){
+    return `${vname(item.vezbaId)} — sljedeći put probaj malo veću težinu.`;
+  }
+  if(allTop && avgRir!=null && avgRir<=1.5){
+    return `${vname(item.vezbaId)} — zadrži težinu; gornji broj ponavljanja je već blizu limita.`;
+  }
+  if(mostlyLow){
+    return `${vname(item.vezbaId)} — razmotri manju težinu da se vratiš u ciljni raspon ${rr.lo}–${rr.hi}.`;
+  }
+  if(atLeastLow){
+    return `${vname(item.vezbaId)} — zadrži težinu i pokušaj dodati ponavljanja.`;
+  }
+  return `${vname(item.vezbaId)} — zadrži težinu i ciljaj stabilniji rezultat u rasponu ${rr.lo}–${rr.hi}.`;
+}
+
 function finishWorkout(sab){
   const session=sesija,records=[],groupDone={},exerciseDone=[];
   session.stavke.forEach(s=>{
     const sets=completedSets(s);if(!sets.length)return;
-    sets.forEach(u=>records.push({id:uid(),datum:session.datum,mezociklusId:(activeCycle()||{}).id,vezbaId:s.vezbaId,serije:1,pon:Number(u.pon)||null,kg:u.kg===""?null:Number(u.kg),napomena:u.nap||""}));
+    sets.forEach(u=>records.push({id:uid(),datum:session.datum,mezociklusId:(activeCycle()||{}).id,vezbaId:s.vezbaId,serije:1,pon:Number(u.pon)||null,kg:u.kg===""?null:Number(u.kg),napomena:u.nap||"",rir:u.rir||""}));
     const g=GRUPA[vpod(s.vezbaId)]||vpod(s.vezbaId)||"Ostalo";groupDone[g]=(groupDone[g]||0)+sets.length;
-    exerciseDone.push({vezbaId:s.vezbaId,sets,plan:s.plan});
+    exerciseDone.push({vezbaId:s.vezbaId,sets,plan:s.plan,ponTarget:s.pon});
   });
   if(!records.length){toast("Nema odrađenih setova");return}
   S.dnevnik.push(...records);save();
@@ -381,8 +453,16 @@ function finishWorkout(sab){
     if(a.kg>b.kg)progress.push(`${vname(x.vezbaId)} · +${(a.kg-b.kg).toFixed(1).replace('.0','')} kg`);
     else if(a.kg===b.kg&&a.pon>b.pon)progress.push(`${vname(x.vezbaId)} · +${a.pon-b.pon} pon. na ${a.kg||"istoj"}${a.kg?" kg":""}`);
   });
+
+  const prs=[],advice=[];
+  exerciseDone.forEach(x=>{
+    if(isNewPR(x.vezbaId,session.datum,x.sets))prs.push(`${vname(x.vezbaId)} — novi najbolji rezultat`);
+    const a=progressionAdvice(x,session.datum,faza(cikNedelja(session.datum),activeCycle()));
+    if(a)advice.push(a);
+  });
+
   sesija=null;
-  showWorkoutSummary({naziv:sab?sab.naziv:"Trening",datum:session.datum,dur,actual,planAll,volume,groupDone,progress});
+  showWorkoutSummary({naziv:sab?sab.naziv:"Trening",datum:session.datum,dur,actual,planAll,volume,groupDone,progress,prs,advice});
 }
 
 function workoutMessage(pct){
@@ -422,7 +502,7 @@ function workoutMessage(pct){
 function showWorkoutSummary(r){
   const pct=r.planAll?Math.round(r.actual/r.planAll*100):100;
   const msg=workoutMessage(pct);
-  openDlg(`<div class="xs">Trening završen</div><div class="card" style="margin-top:8px;border-color:var(--ok)"><div style="font-size:19px;font-weight:800;line-height:1.35">${esc(msg)}</div></div><h2 style="font-size:21px;margin:12px 0 2px">${esc(r.naziv)}</h2><div class="sm mute">${dmy(r.datum)} · ${r.dur} min</div><div class="card" style="margin-top:14px"><div class="row between"><div><div class="xs">Radni setovi</div><div class="num" style="font-size:30px">${r.actual}<span class="mute" style="font-size:18px"> / ${r.planAll}</span></div></div><div style="text-align:right"><div class="xs">Plan</div><div class="num" style="font-size:24px">${pct}%</div></div></div><div class="bar" style="margin-top:10px"><i class="${r.actual>=r.planAll?"full":""}" style="width:${Math.min(100,pct)}%"></i></div>${r.volume?`<div class="sm mute" style="margin-top:9px">Evidentirani volumen: <b class="num" style="color:var(--chalk)">${Math.round(r.volume).toLocaleString("sr-RS")} kg</b></div>`:""}</div><div class="xs" style="margin:14px 0 8px">Po mišićnim grupama</div><div class="list">${Object.entries(r.groupDone).map(([g,n])=>`<div class="card tight"><div class="row between"><span>${esc(g)}</span><b class="num">${n} setova</b></div></div>`).join("")}</div>${r.progress.length?`<div class="xs" style="margin:16px 0 8px">Napredak prema prethodnom treningu</div><div class="card tight">${r.progress.map(x=>`<div class="sm" style="padding:5px 0">↑ ${esc(x)}</div>`).join("")}</div>`:""}<div class="btnrow" style="margin-top:14px"><button class="btn pri grow" id="sumDone">Gotovo</button><button class="btn grow" id="sumReview">Nedeljni pregled</button></div>`);
+  openDlg(`<div class="xs">Trening završen</div><div class="card" style="margin-top:8px;border-color:var(--ok)"><div style="font-size:19px;font-weight:800;line-height:1.35">${esc(msg)}</div></div><h2 style="font-size:21px;margin:12px 0 2px">${esc(r.naziv)}</h2><div class="sm mute">${dmy(r.datum)} · ${r.dur} min</div><div class="card" style="margin-top:14px"><div class="row between"><div><div class="xs">Radni setovi</div><div class="num" style="font-size:30px">${r.actual}<span class="mute" style="font-size:18px"> / ${r.planAll}</span></div></div><div style="text-align:right"><div class="xs">Plan</div><div class="num" style="font-size:24px">${pct}%</div></div></div><div class="bar" style="margin-top:10px"><i class="${r.actual>=r.planAll?"full":""}" style="width:${Math.min(100,pct)}%"></i></div>${r.volume?`<div class="sm mute" style="margin-top:9px">Evidentirani volumen: <b class="num" style="color:var(--chalk)">${Math.round(r.volume).toLocaleString("sr-RS")} kg</b></div>`:""}</div><div class="xs" style="margin:14px 0 8px">Po mišićnim grupama</div><div class="list">${Object.entries(r.groupDone).map(([g,n])=>`<div class="card tight"><div class="row between"><span>${esc(g)}</span><b class="num">${n} setova</b></div></div>`).join("")}</div>${r.progress.length?`<div class="xs" style="margin:16px 0 8px">Napredak prema prethodnom treningu</div><div class="card tight">${r.progress.map(x=>`<div class="sm" style="padding:5px 0">↑ ${esc(x)}</div>`).join("")}</div>`:""}${r.prs&&r.prs.length?`<div class="xs" style="margin:16px 0 8px">Lični rekordi</div><div class="card tight">${r.prs.map(x=>`<div class="sm" style="padding:5px 0">★ ${esc(x)}</div>`).join("")}</div>`:""}${r.advice&&r.advice.length?`<div class="xs" style="margin:16px 0 8px">Za sljedeći trening</div><div class="card tight">${r.advice.slice(0,3).map(x=>`<div class="sm" style="padding:6px 0">${esc(x)}</div>`).join("")}</div>`:""}<div class="btnrow" style="margin-top:14px"><button class="btn pri grow" id="sumDone">Gotovo</button><button class="btn grow" id="sumReview">Nedeljni pregled</button></div>`);
   $("#sumDone").onclick=()=>{closeDlg();go("danas")};
   $("#sumReview").onclick=()=>{closeDlg();go("pregled")};
 }
