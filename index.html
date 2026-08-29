@@ -287,7 +287,14 @@ function seed(){
 
 const vez=id=>S.vezbe.find(v=>v.id===id);const vname=id=>{const v=vez(id);return v?v.naziv:"—"};const vpod=id=>{const v=vez(id);return v?v.podgrupa:""};
 const GRUPE_ORDER=["Noge","Grudi","Leđa","Ramena","Ruke","Trbuh/Core","Kardio"];
-function cikNedelja(d=iso(new Date()),c=activeCycle()){if(!c||!c.pocetak)return null;const a=new Date(c.pocetak+"T00:00:00"),b=new Date(d+"T00:00:00");const n=Math.floor((b-a)/864e5/7)+1;return n<1?1:n}
+function cikNedelja(d=iso(new Date()),c=activeCycle()){
+  if(!c||!c.pocetak)return null;
+  const a=new Date(c.pocetak+"T00:00:00"),b=new Date(d+"T00:00:00");
+  const dur=Math.max(1,Number(c.trajanje)||9);
+  const n=Math.floor((b-a)/864e5/7)+1;
+  if(n<1)return 1;
+  return n>dur?dur+1:n;
+}
 function faza(n,c=activeCycle()){const dur=Number(c&&c.trajanje)||9;if(n==null)return{ime:"—",kol:"b",rir:"—"};if(n<=2)return{ime:"Baza · ned. "+n,kol:"b",rir:"3–4 u rezervi"};if(n<=4)return{ime:"Rast 1 · ned. "+n,kol:"t3",rir:"2–3 u rezervi"};if(n===dur)return{ime:"Deload · ned. "+dur,kol:"b",rir:"4–5 u rezervi"};if(n>dur)return{ime:"Ciklus završen",kol:"t5",rir:"—"};if(n>=Math.max(5,dur-2))return{ime:"Vrhunac · ned. "+n,kol:"t5",rir:"1–2 u rezervi"};return{ime:"Rast 2 · ned. "+n,kol:"t5",rir:"2 u rezervi"}}
 const planSerija=(s,f)=>Number(s[f.kol]??s.b??0);
 function planPoPodgrupi(sabIds,f,sabs=SAB()){const m={};sabIds.forEach(id=>{const sab=sabs.find(x=>x.id===id);if(!sab)return;sab.stavke.forEach(s=>{const p=vpod(s.vezbaId);if(!p)return;m[p]=(m[p]||0)+planSerija(s,f)})});return m}
@@ -605,14 +612,15 @@ function weeklyPlanIds(){
 }
 function vPregledSedmica(f){
   const all=SAB(),aktivni=weeklyPlanIds(),statuses=weeklyStatuses();
-  const plan=planPoPodgrupi(aktivni,f),stv=stvarnoPoPodgrupi(pon0);
+  const c=activeCycle(),wf=faza(cikNedelja(pon0,c),c);
+  const plan=wf.ime==="Ciklus završen"?{}:planPoPodgrupi(aktivni,wf),stv=stvarnoPoPodgrupi(pon0);
   const pods=PODGRUPE.filter(p=>(plan[p]||0)>0||(stv[p]||0)>0);
   const tp=Object.values(plan).reduce((a,b)=>a+b,0),ts=Object.values(stv).reduce((a,b)=>a+b,0);
   const planned=all.filter(s=>aktivni.includes(s.id));
   const statusOf=s=>plannedWorkoutStatus(s.id);
   const completed=planned.filter(s=>["done","custom"].includes(statusOf(s))).length;
   const skipped=planned.filter(s=>statusOf(s)==="skipped").length;
-  $("#view").innerHTML=`<div class="card tight"><div class="row between"><button class="btn sm gh" id="pPrev">‹</button><div style="text-align:center"><b>${dmy(pon0)}</b><div class="sm mute">nedelja od ponedeljka</div></div><button class="btn sm gh" id="pNext">›</button></div></div>
+  $("#view").innerHTML=`<div class="card tight"><div class="row between"><button class="btn sm gh" id="pPrev">‹</button><div style="text-align:center"><b>${dmy(pon0)}</b><div class="sm mute">${esc(wf.ime)}</div></div><button class="btn sm gh" id="pNext">›</button></div></div>
   <div class="card"><div class="xs" style="margin-bottom:8px">Plan ove nedelje</div>
     <div class="row" style="gap:7px;flex-wrap:wrap">${all.map(s=>`<button class="chip ${aktivni.includes(s.id)?"on":""}" data-wplan="${s.id}">${aktivni.includes(s.id)?"✓ ":""}${esc(s.naziv)}</button>`).join("")}</div>
     <div class="sm mute" style="margin-top:8px">Označi treninge koji su planirani za ovu nedelju.</div>
