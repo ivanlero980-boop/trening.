@@ -179,38 +179,77 @@ button.btn.pri:active{filter:brightness(1.05)}
 
 
 .planStatusRow{
-  min-height:92px;
   display:grid;
-  grid-template-columns:minmax(0,1fr) 148px;
+  grid-template-columns:minmax(0,1fr) auto;
   align-items:center;
-  gap:12px;
+  gap:10px;
 }
-.planStatusRow .planStatusText{
-  min-width:0;
-}
-.planStatusRow .planStatusText b{
-  display:block;
-  line-height:1.25;
-}
-.planStatusRow .planStatusText .sm{
-  margin-top:4px;
-}
+.planStatusRow .planStatusText{min-width:0}
+.planStatusRow .planStatusText b{display:block;line-height:1.25;overflow-wrap:anywhere}
+.planStatusRow .planStatusText .sm{margin-top:4px}
 .planStatusRow select{
-  width:148px !important;
-  max-width:148px !important;
-  min-width:148px;
+  width:auto !important;
+  max-width:42vw !important;
+  min-width:0;
   margin:0;
 }
-@media(max-width:390px){
-  .planStatusRow{
-    grid-template-columns:minmax(0,1fr) 132px;
-    gap:9px;
-  }
-  .planStatusRow select{
+.planStatusRow select{
     width:132px !important;
     max-width:132px !important;
     min-width:132px;
   }
+}
+
+
+.list{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.list>.card{margin-bottom:0;
+  font-family:inherit!important;
+}
+
+
+/* Final responsive cleanup */
+.planStatusRow{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;
+  gap:10px;
+}
+.planStatusRow .planStatusText{min-width:0}
+.planStatusRow .planStatusText b{
+  display:block;
+  line-height:1.25;
+  overflow-wrap:anywhere;
+}
+.planStatusRow .planStatusText .sm{margin-top:4px}
+.planStatusRow select{
+  width:auto!important;
+  max-width:42vw!important;
+  min-width:0!important;
+  margin:0!important;
+}
+
+.list{
+  display:flex!important;
+  flex-direction:column!important;
+  gap:8px!important;
+}
+.list>.card{
+  margin-bottom:0!important;
+}
+
+.card,.row,.grow,.trunc{min-width:0}
+.card b,.card .sm,.card .xs,label,summary{
+  overflow-wrap:anywhere;
+  word-break:normal;
+}
+
+input,select,textarea{
+  font-size:16px!important;
+  font-family:inherit!important;
 }
 
 </style>
