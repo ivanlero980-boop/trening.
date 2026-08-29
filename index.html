@@ -246,9 +246,20 @@ function liveWorkout(snap){
   if(snap.sourceLibraryId)lib=LIB().find(x=>x.id===snap.sourceLibraryId);
   if(!lib)lib=LIB().find(x=>normName(cleanWorkoutName(x.naziv))===normName(cleanWorkoutName(snap.naziv)));
   if(!lib)return snap;
-  // Keep the mesocycle snapshot id so weekly plans/history still identify the same slot,
-  // but use the current library definition for name/type/exercises.
-  return {...clone(lib),id:snap.id,sourceLibraryId:lib.id};
+
+  // Library supplies the current exercise selection/name/reps/rest.
+  // Mesocycle snapshot supplies progression values b/t3/t5.
+  const oldByExercise=new Map((snap.stavke||[]).map(s=>[s.vezbaId,s]));
+  const stavke=(lib.stavke||[]).map((s,i)=>{
+    const old=oldByExercise.get(s.vezbaId)||(snap.stavke||[])[i];
+    const b=Math.max(0,Number(s.b)||0);
+    return {...clone(s),
+      b,
+      t3:old?Math.max(0,b+(Number(old.t3??old.b??b)-Number(old.b??b))):b,
+      t5:old?Math.max(0,b+(Number(old.t5??old.b??b)-Number(old.b??b))):b
+    };
+  });
+  return {...clone(lib),id:snap.id,sourceLibraryId:lib.id,stavke};
 }
 function SAB(){
   const c=activeCycle();
@@ -366,9 +377,15 @@ function migrateWorkoutLibrary(){
 
 }
 function LIB(){return S.treningBiblioteka||[]}
-function librarySnapshot(ids){
+function librarySnapshot(ids,progression=null){
+  const p=progression||{midAdd:0,peakAdd:0,deloadPct:60};
   return ids.map(id=>LIB().find(x=>x.id===id)).filter(Boolean).map(x=>{
-    const y=clone(x);y.sourceLibraryId=x.id;y.id=uid();return y;
+    const y=clone(x);y.sourceLibraryId=x.id;y.id=uid();
+    y.stavke=(y.stavke||[]).map(s=>{
+      const b=Math.max(0,Number(s.b)||0);
+      return {...s,b,t3:Math.max(0,b+Number(p.midAdd||0)),t5:Math.max(0,b+Number(p.peakAdd||0))};
+    });
+    return y;
   });
 }
 
@@ -1065,21 +1082,19 @@ function workoutVolumeMaps(s,key="b"){
   return {sub,group:groupFromSub(sub)};
 }
 function workoutVolumeCard(s){
-  const B=workoutVolumeMaps(s,"b"),M=workoutVolumeMaps(s,"t3"),V=workoutVolumeMaps(s,"t5");
-  const groups=GRUPE_ORDER.filter(g=>B.group[g]||M.group[g]||V.group[g]);
-  return `<div class="card"><div class="row between"><div><div class="xs">Volumen treninga</div><b>Setovi po grupama</b></div><span class="chip">Baza · sredina · vrh</span></div>
-  <div style="margin-top:9px">${groups.map(g=>`<details style="border-top:1px solid var(--line);padding:8px 0"><summary class="row between" style="cursor:pointer"><b>${esc(g)}</b><span class="num">${B.group[g]||0} · ${M.group[g]||0} · ${V.group[g]||0}</span></summary><div style="padding-top:6px">${PODGRUPE.filter(p=>GRUPA[p]===g&&(B.sub[p]||M.sub[p]||V.sub[p])).map(p=>`<div class="row between sm" style="padding:4px 0"><span class="mute">${esc(p)}</span><span class="num">${B.sub[p]||0} · ${M.sub[p]||0} · ${V.sub[p]||0}</span></div>`).join("")}</div></details>`).join("")||`<div class="empty">Dodaj vežbe da bi se računao volumen.</div>`}</div></div>`;
+  const B=workoutVolumeMaps(s,"b");
+  const groups=GRUPE_ORDER.filter(g=>B.group[g]);
+  return `<div class="card"><div class="row between"><div><div class="xs">Volumen treninga</div><b>Osnovne serije po grupama</b></div><span class="chip">trening</span></div>
+  <div style="margin-top:9px">${groups.map(g=>`<details style="border-top:1px solid var(--line);padding:8px 0"><summary class="row between" style="cursor:pointer"><b>${esc(g)}</b><span class="num">${B.group[g]||0}</span></summary><div style="padding-top:6px">${PODGRUPE.filter(p=>GRUPA[p]===g&&B.sub[p]).map(p=>`<div class="row between sm" style="padding:4px 0"><span class="mute">${esc(p)}</span><span class="num">${B.sub[p]||0}</span></div>`).join("")}</div></details>`).join("")||`<div class="empty">Dodaj vežbe da bi se računao volumen.</div>`}</div></div>`;
 }
 function selectedLibraryVolumeCard(ids){
   const chosen=ids.map(id=>LIB().find(x=>x.id===id)).filter(Boolean);
-  const sums=key=>groupFromSub(planByKey(chosen,key));
-  const B=sums("b"),M=sums("t3"),V=sums("t5");
-  const groups=GRUPE_ORDER.filter(g=>B[g]||M[g]||V[g]);
-  return `<div class="card" id="mVolCard"><div class="row between"><div><div class="xs">Balans nedelje</div><b>${chosen.length} treninga · nedeljni volumen</b></div><span class="chip">Baza · sredina · vrh</span></div>
-  <div style="margin-top:8px">${groups.map(g=>`<details style="border-top:1px solid var(--line);padding:8px 0"><summary class="row between" style="cursor:pointer"><b>${esc(g)}</b><span class="num">${B[g]||0} · ${M[g]||0} · ${V[g]||0}</span></summary><div class="sm mute" style="padding-top:6px">${chosen.map(s=>{const m=workoutVolumeMaps(s),mm=workoutVolumeMaps(s,"t3"),vv=workoutVolumeMaps(s,"t5");const a=m.group[g]||0,b=mm.group[g]||0,c=vv.group[g]||0;return a||b||c?`<div class="row between" style="padding:3px 0"><span>${esc(cleanWorkoutName(s.naziv))}</span><span class="num">${a} · ${b} · ${c}</span></div>`:""}).join("")}</div></details>`).join("")||`<div class="empty">Izaberi treninge da vidiš nedeljni volumen.</div>`}</div>
-  ${chosen.length?`<div class="xs" style="margin-top:12px">Kontrola po podgrupama</div>${subgroupTargetRows(planByKey(chosen,"b"),planByKey(chosen,"t3"),planByKey(chosen,"t5"))}`:""}</div>`;
+  const sub=planByKey(chosen,"b"),G=groupFromSub(sub);
+  const groups=GRUPE_ORDER.filter(g=>G[g]);
+  return `<div class="card" id="mVolCard"><div class="row between"><div><div class="xs">Balans nedelje</div><b>${chosen.length} treninga · osnovni nedeljni volumen</b></div><span class="chip">baza</span></div>
+  <div style="margin-top:8px">${groups.map(g=>`<details style="border-top:1px solid var(--line);padding:8px 0"><summary class="row between" style="cursor:pointer"><b>${esc(g)}</b><span class="num">${G[g]||0}</span></summary><div class="sm mute" style="padding-top:6px">${chosen.map(s=>{const m=workoutVolumeMaps(s,"b");const a=m.group[g]||0;return a?`<div class="row between" style="padding:3px 0"><span>${esc(cleanWorkoutName(s.naziv))}</span><span class="num">${a}</span></div>`:""}).join("")}</div></details>`).join("")||`<div class="empty">Izaberi treninge da vidiš nedeljni volumen.</div>`}</div>
+  ${chosen.length?`<div class="xs" style="margin-top:12px">Kontrola po podgrupama</div>${PODGRUPE.filter(p=>(sub[p]||0)||volumeTargets()[p][0]>0).map(p=>{const n=sub[p]||0,[lo,hi]=volumeTargets()[p];return `<div style="padding:7px 0;border-top:1px solid var(--line)"><div class="row between"><span>${esc(p)}</span><span class="num" style="color:${volColor(n,p)}">${n}</span></div><div class="xs mute">cilj ${lo}–${hi} setova / ned. · ${volLabel(n,p)}</div></div>`}).join("")}`:""}</div>`;
 }
-
 function vProgram(f){
   if(CTX.sab)return editLibraryWorkout(CTX.sab,f);
   const sabs=LIB();
@@ -1098,15 +1113,15 @@ function editLibraryWorkout(id,f){
   const s=LIB().find(x=>x.id===id);if(!s){go("program");return}
   $("#view").innerHTML=`<button class="btn sm gh" id="nazad" style="margin-bottom:10px">‹ Biblioteka treninga</button>
   <div class="card"><label class="f"><span class="sm mute">Naziv</span><input id="sNaziv" value="${esc(cleanWorkoutName(s.naziv))}"></label><label class="f" style="margin-bottom:0"><span class="sm mute">Tip</span><select id="sTip">${["Full body","Upper","Lower","Ostalo"].map(z=>`<option ${z===s.tip?"selected":""}>${z}</option>`).join("")}</select></label></div>
-  ${workoutVolumeCard(s)}<div class="xs" style="margin:16px 0 8px">Vežbe · osnovno / od 3. ned / od 5. ned</div>
-  <div class="list">${s.stavke.map((x,i)=>`<div class="card tight"><div class="row between"><div class="grow trunc"><b>${esc(vname(x.vezbaId))}</b><div class="sm mute">${esc(vpod(x.vezbaId))}</div></div><div class="btnrow"><button class="btn sm gh" data-up="${i}" ${i===0?"disabled":""}>↑</button><button class="btn sm gh" data-dn="${i}" ${i===s.stavke.length-1?"disabled":""}>↓</button></div></div><div class="g3" style="margin-top:9px"><input data-s="${i}:b" value="${x.b}" inputmode="numeric"><input data-s="${i}:t3" value="${x.t3}" inputmode="numeric"><input data-s="${i}:t5" value="${x.t5}" inputmode="numeric"></div><div class="g2" style="margin-top:8px"><input data-s="${i}:pon" value="${esc(x.pon)}" placeholder="ponavljanja"><input data-s="${i}:odmor" value="${esc(x.odmor)}" placeholder="odmor"></div><div class="btnrow" style="margin-top:9px"><button class="btn sm gh" data-rep="${i}">Zameni vežbu</button><button class="btn sm gh danger" data-rm="${i}">Ukloni</button></div></div>`).join("")}</div>
+  ${workoutVolumeCard(s)}<div class="xs" style="margin:16px 0 8px">Vežbe · osnovne serije</div>
+  <div class="list">${s.stavke.map((x,i)=>`<div class="card tight"><div class="row between"><div class="grow trunc"><b>${esc(vname(x.vezbaId))}</b><div class="sm mute">${esc(vpod(x.vezbaId))}</div></div><div class="btnrow"><button class="btn sm gh" data-up="${i}" ${i===0?"disabled":""}>↑</button><button class="btn sm gh" data-dn="${i}" ${i===s.stavke.length-1?"disabled":""}>↓</button></div></div><div style="margin-top:9px"><label class="f" style="margin:0"><span class="sm mute">Osnovne serije</span><input data-s="${i}:b" value="${x.b}" inputmode="numeric"></label></div><div class="g2" style="margin-top:8px"><input data-s="${i}:pon" value="${esc(x.pon)}" placeholder="ponavljanja"><input data-s="${i}:odmor" value="${esc(x.odmor)}" placeholder="odmor"></div><div class="btnrow" style="margin-top:9px"><button class="btn sm gh" data-rep="${i}">Zameni vežbu</button><button class="btn sm gh danger" data-rm="${i}">Ukloni</button></div></div>`).join("")}</div>
   <button class="btn gh" style="width:100%;margin-top:8px" id="add">+ Dodaj vežbu</button><hr class="sep">
   <button class="btn gh" style="width:100%;margin-bottom:8px" id="dupl">Napravi kopiju</button>
   <button class="btn gh danger" style="width:100%" id="obrisi">Obriši ovaj trening</button>`;
   $("#nazad").onclick=()=>go("program");
   $("#sNaziv").oninput=e=>{s.naziv=e.target.value;save()};
   $("#sTip").onchange=e=>{s.tip=e.target.value;save();render()};
-  $("#add").onclick=()=>pickVezba(null,vid=>{s.stavke.push({id:uid(),vezbaId:vid,b:3,t3:3,t5:3,pon:"",odmor:""});save();render()});
+  $("#add").onclick=()=>pickVezba(null,vid=>{s.stavke.push({id:uid(),vezbaId:vid,b:3,pon:"",odmor:""});save();render()});
   $("#dupl").onclick=()=>{const y=clone(s);y.id=uid();y.naziv=s.naziv+" — kopija";S.treningBiblioteka.push(y);save();go("program",{sab:y.id,title:"Uredi trening"});toast("Kopija napravljena")};
   $("#obrisi").onclick=()=>{if(confirm("Obrisati „"+s.naziv+"” iz biblioteke? Stari mezociklusi ostaju nepromijenjeni.")){S.treningBiblioteka=LIB().filter(x=>x.id!==id);save();go("program")}};
   const V=$("#view");
@@ -1114,7 +1129,7 @@ function editLibraryWorkout(id,f){
   V.querySelectorAll("[data-dn]").forEach(b=>b.onclick=()=>{const i=+b.dataset.dn;[s.stavke[i+1],s.stavke[i]]=[s.stavke[i],s.stavke[i+1]];save();render()});
   V.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{s.stavke.splice(+b.dataset.rm,1);save();render()});
   V.querySelectorAll("[data-rep]").forEach(b=>b.onclick=()=>{const i=+b.dataset.rep;pickVezba(vpod(s.stavke[i].vezbaId),vid=>{s.stavke[i].vezbaId=vid;save();render()})});
-  V.querySelectorAll("input[data-s]").forEach(inp=>inp.oninput=()=>{const[i,k]=inp.dataset.s.split(":");s.stavke[+i][k]=["b","t3","t5"].includes(k)?(Number(inp.value)||0):inp.value;save()});
+  V.querySelectorAll("input[data-s]").forEach(inp=>inp.oninput=()=>{const[i,k]=inp.dataset.s.split(":");s.stavke[+i][k]=k==="b"?(Number(inp.value)||0):inp.value;save()});
 }
 
 let filtP="";
@@ -1202,7 +1217,11 @@ function newCycleDialog(preload=null){
   <div id="weekSlots"></div>
   <div class="xs" style="margin:14px 0 8px">3 · Balans nedelje</div><div id="mVolWrap"></div>
   <div class="card"><div class="row between"><div><div class="xs">Program</div><b>${preload?esc(preload.naziv):"Sačuvaj ovu nedelju"}</b><div class="sm mute">${preload?"Učitano iz biblioteke programa":"Možeš je koristiti i u budućim mezociklusima."}</div></div>${preload?"":`<button class="btn gh" id="saveProgram">Sačuvaj</button>`}</div></div>
-  <hr class="sep"><div class="xs" style="margin-bottom:8px">4 · Mezociklus</div>
+  <div class="card"><div class="xs">4 · Progresija volumena</div><div class="sm mute" style="margin:4px 0 10px">Povećanje se primenjuje na osnovne serije svakog treninga samo u ovom mezociklusu.</div>
+  <div class="g2"><label class="f"><span class="sm mute">Od 3. nedelje</span><select id="mMidAdd"><option value="0">bez povećanja</option><option value="1" selected>+1 serija / vežbi</option><option value="2">+2 serije / vežbi</option></select></label>
+  <label class="f"><span class="sm mute">Od 5. nedelje</span><select id="mPeakAdd"><option value="0">bez povećanja</option><option value="1">+1 serija / vežbi</option><option value="2" selected>+2 serije / vežbi</option></select></label></div>
+  <div class="sm mute">Deload ostaje poslednja nedelja i vraća se na osnovni volumen.</div></div>
+  <hr class="sep"><div class="xs" style="margin-bottom:8px">5 · Mezociklus</div>
   <label class="f"><span class="sm mute">Naziv mezociklusa</span><input id="mN" value="${esc(next)}"></label>
   <div class="g2"><label class="f"><span class="sm mute">Prvi ponedeljak</span><input type="date" id="mP" value="${monday(iso(new Date()))}"></label><label class="f"><span class="sm mute">Trajanje</span><select id="mT">${[6,7,8,9,10,12].map(n=>`<option ${n===9?"selected":""} value="${n}">${n} nedelja</option>`).join("")}</select></label></div>
   <div class="sm mute" style="margin:2px 0 12px">Nedelja definiše šta treniraš; mezociklus definiše kako volumen raste kroz vreme.</div>
@@ -1249,7 +1268,8 @@ function newCycleDialog(preload=null){
     const name=$("#mN").value.trim();if(!name){toast("Upiši naziv");return}
     const start=monday($("#mP").value||iso(new Date())),dur=Number($("#mT").value)||9;
     const cur=activeCycle();if(cur)cur.status="završen";
-    const c={id:uid(),naziv:name,pocetak:start,trajanje:dur,status:"aktivan",frekvencija:weekIds.length,sourceProgramId:preload?.id||"",programNaziv:preload?.naziv||"",sabloni:librarySnapshot(weekIds)};
+    const progression={midAdd:Number($("#mMidAdd").value)||0,peakAdd:Number($("#mPeakAdd").value)||0};
+    const c={id:uid(),naziv:name,pocetak:start,trajanje:dur,status:"aktivan",frekvencija:weekIds.length,sourceProgramId:preload?.id||"",programNaziv:preload?.naziv||"",progresija:progression,sabloni:librarySnapshot(weekIds,progression)};
     S.mezociklusi.push(c);S.aktivniMezociklusId=c.id;save();closeDlg();render();toast("Kreiran "+name);
   };
   renderSlots();
