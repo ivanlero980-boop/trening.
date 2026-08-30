@@ -261,7 +261,7 @@ input,select,textarea{
 <dialog id="dlg"><div class="sheet" id="dlgBody"></div></dialog><div class="toast" id="toast"></div>
 <script>
 "use strict";
-const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,BUILD_ID="2026.08.30.6",BUILD_LABEL="Iteracija 6",BUILD_DATE="30.08.2026.";
+const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,BUILD_ID="2026.08.30.6.1",BUILD_LABEL="Iteracija 6.1",BUILD_DATE="30.08.2026.";
 const CATALOG_VERSION=1;
 const PODGRUPE=["Kvadriceps","Hamstring","Gluteus","Listovi","Grudi","Leđa","Rame — front","Rame — side","Rame — rear","Biceps","Triceps","Podlaktice","Trbuh/Core","Kardio"];
 const GRUPA={Kvadriceps:"Noge",Hamstring:"Noge",Gluteus:"Noge",Listovi:"Noge",Grudi:"Grudi","Leđa":"Leđa","Rame — front":"Ramena","Rame — side":"Ramena","Rame — rear":"Ramena",Biceps:"Ruke",Triceps:"Ruke",Podlaktice:"Ruke","Trbuh/Core":"Trbuh/Core",Kardio:"Kardio"};
@@ -1324,12 +1324,10 @@ function selectedLibraryVolumeCard(ids){
 function vProgram(f){
   if(CTX.sab)return editLibraryWorkout(CTX.sab,f);
   const sabs=LIB();
-  $("#view").innerHTML=`<div class="card"><div class="xs">Planiranje</div><h2 style="font-size:20px;margin-top:3px">Složi novu nedelju</h2><div class="sm mute">Izaberi koliko puta nedeljno treniraš, složi treninge i proveri balans volumena.</div><button class="btn pri" style="width:100%;margin-top:12px" id="newCycleTop">+ Novi mezociklus</button></div>
-  <div class="card"><div class="row between"><div><div class="xs">Biblioteka programa</div><h2 style="font-size:20px;margin-top:3px">${PROG().length} programa</h2><div class="sm mute">Program je sačuvana nedeljna konstrukcija koju možeš ponovo koristiti.</div></div><div class="btnrow"><button class="btn sm pri" id="newProgramTop">+ Novi</button><button class="btn sm gh" id="openPrograms">Otvori</button></div></div></div>
+  $("#view").innerHTML=`<div class="card"><div class="row between"><div><div class="xs">Biblioteka programa</div><h2 style="font-size:20px;margin-top:3px">${PROG().length} programa</h2><div class="sm mute">Program je sačuvana nedeljna konstrukcija koju možeš ponovo koristiti.</div></div><div class="btnrow"><button class="btn sm pri" id="newProgramTop">+ Novi</button><button class="btn sm gh" id="openPrograms">Otvori</button></div></div></div>
   <div class="card"><div class="xs">Biblioteka treninga</div><h2 style="font-size:20px;margin-top:3px">${sabs.length} treninga</h2><div class="sm mute">Trening napraviš jednom, a zatim ga koristiš u različitim programima i mezociklusima.</div></div>
   <div class="list">${sabs.map(s=>`<div class="card tight" data-open="${s.id}" style="cursor:pointer"><div class="row between"><div class="grow"><b>${esc(cleanWorkoutName(s.naziv))}</b><div class="sm mute">${s.stavke.length} vežbi · osnovno ${s.stavke.reduce((a,x)=>a+Number(x.b||0),0)} serija</div></div><span class="chip">${esc(s.tip||"—")}</span></div></div>`).join("")||`<div class="empty">Biblioteka je prazna.</div>`}</div>
   <button class="btn pri" style="width:100%;margin-top:10px" id="novi">+ Novi trening</button>`;
-  $("#newCycleTop").onclick=newCycleDialog;
   $("#openPrograms").onclick=programLibraryDialog;
   $("#newProgramTop").onclick=()=>newProgramDialog();
   $("#view").querySelectorAll("[data-open]").forEach(c=>c.onclick=()=>go("program",{sab:c.dataset.open,title:"Uredi trening"}));
