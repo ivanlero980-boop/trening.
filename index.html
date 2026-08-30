@@ -261,7 +261,7 @@ input,select,textarea{
 <dialog id="dlg"><div class="sheet" id="dlgBody"></div></dialog><div class="toast" id="toast"></div>
 <script>
 "use strict";
-const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,BUILD_ID="2026.08.30.2",BUILD_LABEL="Stabilizacija 2",BUILD_DATE="30.08.2026.";
+const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,BUILD_ID="2026.08.30.3",BUILD_LABEL="Iteracija 3",BUILD_DATE="30.08.2026.";
 const CATALOG_VERSION=1;
 const PODGRUPE=["Kvadriceps","Hamstring","Gluteus","Listovi","Grudi","Leđa","Rame — front","Rame — side","Rame — rear","Biceps","Triceps","Podlaktice","Trbuh/Core","Kardio"];
 const GRUPA={Kvadriceps:"Noge",Hamstring:"Noge",Gluteus:"Noge",Listovi:"Noge",Grudi:"Grudi","Leđa":"Leđa","Rame — front":"Ramena","Rame — side":"Ramena","Rame — rear":"Ramena",Biceps:"Ruke",Triceps:"Ruke",Podlaktice:"Ruke","Trbuh/Core":"Trbuh/Core",Kardio:"Kardio"};
@@ -326,6 +326,35 @@ function validateImport(d){
 
 function load(){try{const raw=localStorage.getItem(KEY);if(raw){S=JSON.parse(raw);return}}catch(e){}S=seed();save()}
 function activeCycle(){return S&&Array.isArray(S.mezociklusi)?S.mezociklusi.find(c=>c.id===S.aktivniMezociklusId)||S.mezociklusi.find(c=>c.status==="aktivan")||S.mezociklusi[S.mezociklusi.length-1]:null}
+
+function cycleForDate(date){
+  const cycles=[...(S.mezociklusi||[])].filter(c=>c&&c.pocetak).sort((a,b)=>a.pocetak.localeCompare(b.pocetak));
+  if(!cycles.length)return null;
+  let chosen=null;
+  for(const c of cycles)if(c.pocetak<=date)chosen=c;
+  return chosen||cycles[0];
+}
+function libraryIdForSabId(sid){
+  if(!sid)return "";
+  for(const c of (S.mezociklusi||[])){
+    const s=(c.sabloni||[]).find(x=>x.id===sid);
+    if(s)return s.sourceLibraryId||"";
+  }
+  const l=LIB().find(x=>x.id===sid);
+  return l?l.id:"";
+}
+function sabForLibraryId(c,libId){
+  if(!c||!libId)return null;
+  return (c.sabloni||[]).find(s=>s.sourceLibraryId===libId) || null;
+}
+function workoutsForWeek(weekStart){
+  const c=cycleForDate(weekStart)||activeCycle();
+  if(!c)return [];
+  const currentMonday=monday(iso(new Date()));
+  // Past weeks are historical snapshots. Current/future weeks may use current library definitions.
+  return weekStart<currentMonday?(c.sabloni||[]):(c.sabloni||[]).map(liveWorkout);
+}
+
 function liveWorkout(snap){
   if(!snap)return snap;
   let lib=null;
@@ -582,16 +611,36 @@ function render(){const c=activeCycle(),n=cikNedelja(),f=faza(n,c);$("#phase").t
 
 
 /* ISTORIJA TRENINGA */
+function workoutHistoryGroups(){
+  const map=new Map();
+  S.dnevnik.forEach(l=>{
+    const key=l.sessionId?("s:"+l.sessionId):("d:"+l.datum);
+    if(!map.has(key))map.set(key,{key,date:l.datum,rows:[]});
+    map.get(key).rows.push(l);
+  });
+  return [...map.values()].sort((a,b)=>{
+    if(a.date!==b.date)return b.date.localeCompare(a.date);
+    const at=Math.max(...a.rows.map(x=>Number(String(x.sessionId||"").match(/\d{10,}/)?.[0]||0)));
+    const bt=Math.max(...b.rows.map(x=>Number(String(x.sessionId||"").match(/\d{10,}/)?.[0]||0)));
+    return bt-at;
+  });
+}
+function logsZaTrening(key){
+  if(String(key).startsWith("s:"))return S.dnevnik.filter(l=>l.sessionId===String(key).slice(2));
+  if(String(key).startsWith("d:"))return S.dnevnik.filter(l=>l.datum===String(key).slice(2)&&!l.sessionId);
+  // Legacy callers by date.
+  return S.dnevnik.filter(l=>l.datum===key);
+}
 function logsZaDatum(d){return S.dnevnik.filter(l=>l.datum===d)}
 function grupisiTrening(logs){
   const m=new Map();
   logs.forEach(l=>{if(!m.has(l.vezbaId))m.set(l.vezbaId,[]);m.get(l.vezbaId).push(l)});
   return [...m.entries()];
 }
-function detaljTreninga(d){
-  const logs=logsZaDatum(d);
+function detaljTreninga(key){
+  const logs=logsZaTrening(key);
   if(!logs.length){toast("Trening nije pronađen");go("danas");return}
-  const gr=grupisiTrening(logs),ser=logs.reduce((a,l)=>a+Number(l.serije||0),0);
+  const d=logs[0].datum,gr=grupisiTrening(logs),ser=logs.reduce((a,l)=>a+Number(l.serije||0),0);
   const vol=logs.reduce((a,l)=>a+(Number(l.kg)||0)*(Number(l.pon)||0)*(Number(l.serije)||0),0);
   $("#ttl").textContent="Trening "+dmy(d);
   $("#view").innerHTML=`
@@ -607,6 +656,7 @@ function detaljTreninga(d){
         <input data-h="${l.id}:kg" value="${esc(l.kg??"")}" inputmode="decimal" placeholder="kg" style="width:84px;padding:8px">
         <span class="mute sm">×</span>
         <input data-h="${l.id}:pon" value="${esc(l.pon??"")}" inputmode="numeric" placeholder="pon" style="width:76px;padding:8px">
+        ${l.rir!==undefined&&l.rir!==""?`<span class="chip">@${esc(l.rir)}</span>`:""}
         <button class="btn sm gh danger" data-dell="${l.id}">✕</button>
       </div>`).join("")}</div>`).join("")}</div>
     <button class="btn gh danger" style="width:100%;margin-top:12px" id="hDel">Obriši cijeli trening</button>`;
@@ -618,10 +668,10 @@ function detaljTreninga(d){
   $("#view").querySelectorAll("[data-dell]").forEach(b=>b.onclick=()=>{
     if(!confirm("Obrisati ovaj set?"))return;
     S.dnevnik=S.dnevnik.filter(x=>x.id!==b.dataset.dell);save();
-    logsZaDatum(d).length?detaljTreninga(d):go("danas");
+    logsZaTrening(key).length?detaljTreninga(key):go("danas");
   });
   $("#hDel").onclick=()=>{if(confirm("Obrisati cijeli trening "+dmy(d)+"?")){
-    S.dnevnik=S.dnevnik.filter(x=>x.datum!==d);save();go("danas");toast("Trening obrisan");
+    const ids=new Set(logs.map(x=>x.id));S.dnevnik=S.dnevnik.filter(x=>!ids.has(x.id));save();go("danas");toast("Trening obrisan");
   }};
 }
 
@@ -645,6 +695,16 @@ function previousWorkoutLabel(vid,date){
   return "Prošli put: "+a.map(x=>(x.kg!==""?x.kg+" kg × ":"")+x.pon).join(" · ");
 }
 function completedSets(s){return s.unosi.filter(u=>String(u.pon??"").trim()!=="")}
+function suggestedWorkoutId(date){
+  const wk=monday(date||iso(new Date()));
+  const c=cycleForDate(wk)||activeCycle();
+  const ids=weeklyPlanIds(wk,c);
+  if(!ids.length)return "";
+  const oldPon=pon0;pon0=wk;
+  let pick=ids.find(id=>plannedWorkoutStatus(id)==="pending")||ids[0];
+  pon0=oldPon;
+  return pick;
+}
 function vDanas(f){
   const v=$("#view");
   if(!sesija){
@@ -652,29 +712,40 @@ function vDanas(f){
           <div class="dateShell" id="dateShell">
             <span id="dateText">${dmy(iso(new Date()))}</span>
             <input type="date" id="dDatum" value="${iso(new Date())}" aria-label="Datum treninga">
-          </div></label><label class="f"><span class="sm mute">Trening iz programa</span><select id="dSab">${SAB().map(s=>`<option value="${s.id}">${esc(cleanWorkoutName(s.naziv))}</option>`).join("")}</select></label><button class="btn pri" style="width:100%" id="dStart">Otvori trening</button>
+          </div></label><label class="f"><span class="sm mute">Trening ove sedmice</span><select id="dSab">${SAB().map(s=>`<option value="${s.id}">${esc(cleanWorkoutName(s.naziv))}</option>`).join("")}</select></label><div class="sm mute" style="margin:-4px 0 10px">Redosled nije fiksan — izaberi trening prema oporavku. Plan prati šta je odrađeno, ne kojim redom.</div><button class="btn pri" style="width:100%" id="dStart">Otvori trening</button>
         <button class="btn gh" style="width:100%;margin-top:8px" id="dCustom">Custom / Putni trening</button><div class="sm mute" style="margin-top:10px">Jedan red = jedan radni set. Težina se unapred preuzima iz poslednjeg treninga; upis ponavljanja označava da je set odrađen.</div></div>${bodyDue()?`<div class="card tight" style="border-color:var(--amber)"><div class="row between"><div><b>Vrijeme je za novo mjerenje osnovnih podataka</b><div class="sm mute">Prošlo je 6 mjeseci od posljednjeg unosa.</div></div><button class="btn sm gh" id="bodyGo">Otvori</button></div></div>`:""}${zadnjiTreninzi()}`;
     const bg=$("#bodyGo");if(bg)bg.onclick=()=>{pregledMode="tijelo";go("pregled")};
     const dateInput=$("#dDatum"),dateText=$("#dateText");
+    const workoutSelect=$("#dSab");
     if(dateInput&&dateText){
-      dateInput.onchange=()=>{if(dateInput.value)dateText.textContent=dmy(dateInput.value)};
+      const applySuggested=()=>{
+        if(dateInput.value)dateText.textContent=dmy(dateInput.value);
+        const wk=monday(dateInput.value),sabs=workoutsForWeek(wk);
+        if(workoutSelect&&sabs.length){
+          const current=workoutSelect.value;
+          workoutSelect.innerHTML=sabs.map(s=>`<option value="${s.id}">${esc(cleanWorkoutName(s.naziv))}</option>`).join("");
+          const sid=suggestedWorkoutId(dateInput.value);
+          workoutSelect.value=sabs.some(s=>s.id===sid)?sid:(sabs.some(s=>s.id===current)?current:sabs[0].id);
+        }
+      };
+      dateInput.onchange=applySuggested;
+      applySuggested();
     }
     v.querySelectorAll("[data-hist]").forEach(c=>c.onclick=()=>detaljTreninga(c.dataset.hist));
     $("#dCustom").onclick=()=>{
-      const real=S.sabloni.find(x=>x.id===$("#dSab").value);
+      const real=workoutsForWeek(monday($("#dDatum").value)).find(x=>x.id===$("#dSab").value);
       if(!real){toast("Izaberi trening koji Custom zamjenjuje");return}
       const ciljevi={};
       real.stavke.forEach(x=>{
         const g=GRUPA[vpod(x.vezbaId)]||vpod(x.vezbaId);
         ciljevi[g]=(ciljevi[g]||0)+planSerija(x,f);
       });
-      sesija={datum:$("#dDatum").value,sabId:real.id,custom:true,startTs:Date.now(),ciljevi,stavke:[]};sessionSave();
+      sesija={datum:$("#dDatum").value,sabId:real.id,sessionId:"sess_"+Date.now()+"_"+uid(),custom:true,startTs:Date.now(),ciljevi,stavke:[]};sessionSave();
       render();
     };
     $("#dStart").onclick=()=>{
-      const real=SAB().find(x=>x.id===$("#dSab").value);if(!real){toast("Trening nije pronađen");return}
-      const datum=$("#dDatum").value;
-      sesija={datum,sabId:real.id,sourceLibraryId:real.sourceLibraryId||"",startTs:Date.now(),stavke:real.stavke.map(s=>{const plan=planSerija(s,f);return{vezbaId:s.vezbaId,plan,pon:s.pon,odmor:s.odmor,unosi:makeSetRows(s.vezbaId,plan,datum)}})};sessionSave();
+      const datum=$("#dDatum").value,wk=monday(datum),real=workoutsForWeek(wk).find(x=>x.id===$("#dSab").value);if(!real){toast("Trening nije pronađen");return}
+      sesija={datum,sabId:real.id,sourceLibraryId:real.sourceLibraryId||"",sessionId:"sess_"+Date.now()+"_"+uid(),startTs:Date.now(),stavke:real.stavke.map(s=>{const plan=planSerija(s,f);return{vezbaId:s.vezbaId,plan,pon:s.pon,odmor:s.odmor,unosi:makeSetRows(s.vezbaId,plan,datum)}})};sessionSave();
       render();
     };
     return;
@@ -733,7 +804,7 @@ function rirValue(r){
 }
 function bestSet(rows){
   return rows.reduce((b,z)=>{
-    const kg=Number(z.kg)||0,pon=Number(z.pon)||0;
+    const kg=parseNum(z.kg)||0,pon=Number(z.pon)||0;
     const score=kg*1000+pon;
     return score>b.score?{kg,pon,score}:b;
   },{kg:0,pon:0,score:-1});
@@ -779,9 +850,11 @@ function progressionAdvice(item,sessionDate,f){
 
 function finishWorkout(sab){
   const session=sesija,records=[],groupDone={},exerciseDone=[];
+  const sessionCycle=cycleForDate(session.datum)||activeCycle();
+  const sessionId=session.sessionId||("sess_"+(session.startTs||Date.now())+"_"+uid());
   session.stavke.forEach(s=>{
     const sets=completedSets(s);if(!sets.length)return;
-    sets.forEach(u=>records.push({id:uid(),datum:session.datum,mezociklusId:(activeCycle()||{}).id,vezbaId:s.vezbaId,serije:1,pon:Number(u.pon)||null,kg:parseNum(u.kg),napomena:u.nap||"",rir:u.rir||"",sabId:session.sabId||"",originalSabId:session.sabId||"",custom:!!session.custom}));
+    sets.forEach(u=>records.push({id:uid(),sessionId,datum:session.datum,mezociklusId:(sessionCycle||{}).id,vezbaId:s.vezbaId,serije:1,pon:Number(u.pon)||null,kg:parseNum(u.kg),napomena:u.nap||"",rir:u.rir||"",sabId:session.sabId||"",originalSabId:session.sabId||"",custom:!!session.custom}));
     const g=GRUPA[vpod(s.vezbaId)]||vpod(s.vezbaId)||"Ostalo";groupDone[g]=(groupDone[g]||0)+sets.length;
     exerciseDone.push({vezbaId:s.vezbaId,sets,plan:s.plan,ponTarget:s.pon});
   });
@@ -790,7 +863,7 @@ function finishWorkout(sab){
   const wk=monday(session.datum);
   if(!S.sedmicniStatus)S.sedmicniStatus={};
   if(!S.sedmicniStatus[wk])S.sedmicniStatus[wk]={};
-  if(session.sabId)S.sedmicniStatus[wk][session.sabId]=session.custom?"custom":"done";
+  if(session.sabId)S.sedmicniStatus[wk][workoutIdentity(session.sabId)]=session.custom?"custom":"done";
   save();
   const dur=Math.max(1,Math.round((Date.now()-(session.startTs||Date.now()))/60000)),planAll=session.stavke.reduce((a,s)=>a+Number(s.plan||0),0),actual=records.length,volume=records.reduce((a,l)=>a+(l.kg!=null&&l.pon?Number(l.kg)*Number(l.pon):0),0);
   const progress=[];
@@ -798,7 +871,7 @@ function finishWorkout(sab){
     const prev=previousWorkoutSets(x.vezbaId,session.datum);if(!prev.length)return;
     const cur=x.sets.map(u=>({kg:parseNum(u.kg)||0,pon:Number(u.pon)||0}));
     const best=a=>a.reduce((b,z)=>(z.kg>b.kg||(z.kg===b.kg&&z.pon>b.pon))?z:b,{kg:0,pon:0});
-    const a=best(cur),b=best(prev.map(z=>({kg:Number(z.kg)||0,pon:Number(z.pon)||0})));
+    const a=best(cur),b=best(prev.map(z=>({kg:parseNum(z.kg)||0,pon:Number(z.pon)||0})));
     if(a.kg>b.kg)progress.push(`${vname(x.vezbaId)} · +${(a.kg-b.kg).toFixed(1).replace('.0','')} kg`);
     else if(a.kg===b.kg&&a.pon>b.pon)progress.push(`${vname(x.vezbaId)} · +${a.pon-b.pon} pon. na ${a.kg||"istoj"}${a.kg?" kg":""}`);
   });
@@ -806,7 +879,7 @@ function finishWorkout(sab){
   const prs=[],advice=[];
   exerciseDone.forEach(x=>{
     if(isNewPR(x.vezbaId,session.datum,x.sets))prs.push(`${vname(x.vezbaId)} — novi najbolji rezultat`);
-    const a=progressionAdvice(x,session.datum,faza(cikNedelja(session.datum),activeCycle()));
+    const a=progressionAdvice(x,session.datum,faza(cikNedelja(session.datum,sessionCycle),sessionCycle));
     if(a)advice.push(a);
   });
 
@@ -855,8 +928,16 @@ function showWorkoutSummary(r){
   $("#sumDone").onclick=()=>{closeDlg();go("danas")};
   $("#sumReview").onclick=()=>{closeDlg();go("pregled")};
 }
-function zadnjiTreninzi(){const dani=[...new Set(S.dnevnik.map(l=>l.datum))].sort().reverse().slice(0,6);if(!dani.length)return `<div class="empty">Još nema treninga. Otvori prvi iznad.</div>`;return `<div class="xs" style="margin:16px 0 8px">Poslednji treninzi</div><div class="list">`+dani.map(d=>{const rows=S.dnevnik.filter(l=>l.datum===d);const ser=rows.reduce((a,l)=>a+Number(l.serije||0),0);const pods=[...new Set(rows.map(l=>vpod(l.vezbaId)))];return `<div class="card tight" data-hist="${d}" style="cursor:pointer"><div class="row between"><div class="grow"><b>${dmy(d)}</b><div class="sm mute trunc">${esc(pods.slice(0,4).join(" · "))}${pods.length>4?" …":""}</div></div><div class="num">${ser}<span class="sm mute" style="font-weight:600"> set</span></div></div></div>`}).join("")+`</div>`}
-
+function zadnjiTreninzi(){
+  const groups=workoutHistoryGroups().slice(0,6);
+  if(!groups.length)return `<div class="empty">Još nema treninga. Otvori prvi iznad.</div>`;
+  return `<div class="xs" style="margin:16px 0 8px">Poslednji treninzi</div><div class="list">`+
+    groups.map(g=>{
+      const rows=g.rows,ser=rows.reduce((a,l)=>a+Number(l.serije||0),0),pods=[...new Set(rows.map(l=>vpod(l.vezbaId)))];
+      const sid=rows.find(l=>l.sabId)?.sabId,sab=sid?((S.mezociklusi||[]).flatMap(c=>c.sabloni||[]).find(x=>x.id===sid)):null;
+      return `<div class="card tight" data-hist="${esc(g.key)}" style="cursor:pointer"><div class="row between"><div class="grow"><b>${dmy(g.date)}${sab?` · ${esc(cleanWorkoutName(sab.naziv))}`:""}</b><div class="sm mute trunc">${esc(pods.slice(0,4).join(" · "))}${pods.length>4?" …":""}</div></div><div class="num">${ser}<span class="sm mute" style="font-weight:600"> set</span></div></div></div>`;
+    }).join("")+`</div>`;
+}
 let pregledMode="sedmica";
 let pon0=monday(iso(new Date()));
 
@@ -891,9 +972,14 @@ function inferLegacyWorkoutIdsForWeek(){
   return result;
 }
 function plannedWorkoutStatus(sid){
-  const st=weeklyStatuses()[sid];
+  const ident=workoutIdentity(sid);
+  const st=weeklyStatuses()[ident]||weeklyStatuses()[sid];
   if(st)return st;
-  const logs=S.dnevnik.filter(l=>monday(l.datum)===pon0 && (l.sabId===sid || l.originalSabId===sid));
+  const logs=S.dnevnik.filter(l=>{
+    if(monday(l.datum)!==pon0)return false;
+    const logSid=l.originalSabId||l.sabId;
+    return logSid===sid || workoutIdentity(logSid)===ident;
+  });
   if(logs.some(l=>l.custom))return "custom";
   if(logs.length)return "done";
   if(inferLegacyWorkoutIdsForWeek()[sid])return "done";
@@ -903,48 +989,57 @@ function statusLabel(st){
   return {done:"Odrađen",custom:"Custom",skipped:"Preskočen",pending:"Nije još odrađen"}[st]||"Nije još odrađen";
 }
 
-function defaultWeekPlanIds(c=activeCycle()){
+function defaultWeekPlanIds(c=cycleForDate(pon0)||activeCycle()){
   if(!c)return [];
-
-  // Program is the source of truth for the default week.
   let p=null;
   if(c.sourceProgramId)p=PROG().find(x=>x.id===c.sourceProgramId);
   if(!p)p=PROG().find(x=>x.migratedFromCycleId===c.id);
-  if(!p && c.programNaziv)p=PROG().find(x=>x.naziv===c.programNaziv);
+  if(!p&&c.programNaziv)p=PROG().find(x=>x.naziv===c.programNaziv);
 
   if(p&&Array.isArray(p.treningIds)&&p.treningIds.length){
     const ids=[];
     p.treningIds.forEach(libId=>{
-      // A mesocycle holds snapshots, so map the library workout id
-      // to the snapshot id used inside this concrete cycle.
-      let snap=(c.sabloni||[]).find(s=>s.sourceLibraryId===libId);
-      if(!snap){
-        const lib=LIB().find(x=>x.id===libId);
-        if(lib)snap=(c.sabloni||[]).find(s=>normName(cleanWorkoutName(s.naziv))===normName(cleanWorkoutName(lib.naziv)));
-      }
+      const snap=sabForLibraryId(c,libId);
       if(snap&&!ids.includes(snap.id))ids.push(snap.id);
     });
     if(ids.length)return ids;
   }
-
-  // Newer cycles already contain only the workouts selected for their program.
-  if(Number(c.frekvencija)>0 && (c.sabloni||[]).length===Number(c.frekvencija)){
-    return c.sabloni.map(s=>s.id);
-  }
-
-  // Compatibility fallback for old data only.
+  if(Number(c.frekvencija)>0&&(c.sabloni||[]).length===Number(c.frekvencija))return c.sabloni.map(s=>s.id);
   return (c.sabloni||[]).slice(0,Number(c.frekvencija)||c.sabloni.length).map(s=>s.id);
 }
-function weeklyPlanIds(){
+function planEntryToSnapshotId(entry,c){
+  if(!c||!entry)return "";
+  if((c.sabloni||[]).some(s=>s.id===entry))return entry;
+  let libId="";
+  // New format: stored directly as library ID.
+  if(LIB().some(x=>x.id===entry))libId=entry;
+  // Old format: stored as snapshot ID from this or a previous cycle.
+  if(!libId)libId=libraryIdForSabId(entry);
+  const snap=sabForLibraryId(c,libId);
+  return snap?snap.id:"";
+}
+function storedPlanIdsFromSnapshotIds(ids,c){
+  return ids.map(id=>{
+    const s=(c&&c.sabloni||[]).find(x=>x.id===id);
+    return s&&s.sourceLibraryId?s.sourceLibraryId:id;
+  }).filter(Boolean);
+}
+function weeklyPlanIds(weekStart=pon0,c=cycleForDate(weekStart)||activeCycle()){
   if(!S.sedmicniPlan)S.sedmicniPlan={};
-  const saved=S.sedmicniPlan[pon0];
-  if(Array.isArray(saved))return saved;
-  return defaultWeekPlanIds();
+  const saved=S.sedmicniPlan[weekStart];
+  if(Array.isArray(saved)){
+    const mapped=saved.map(x=>planEntryToSnapshotId(x,c)).filter(Boolean);
+    if(mapped.length)return [...new Set(mapped)];
+  }
+  return defaultWeekPlanIds(c);
+}
+function workoutIdentity(sid){
+  return libraryIdForSabId(sid)||sid;
 }
 function vPregledSedmica(f){
-  const all=SAB(),aktivni=weeklyPlanIds(),statuses=weeklyStatuses();
-  const c=activeCycle(),wf=faza(cikNedelja(pon0,c),c);
-  const plan=wf.ime==="Ciklus završen"?{}:planPoPodgrupi(aktivni,wf),stv=stvarnoPoPodgrupi(pon0);
+  const c=cycleForDate(pon0)||activeCycle(),all=workoutsForWeek(pon0),aktivni=weeklyPlanIds(pon0,c),statuses=weeklyStatuses();
+  const wf=faza(cikNedelja(pon0,c),c);
+  const plan=wf.ime==="Ciklus završen"?{}:planPoPodgrupi(aktivni,wf,all),stv=stvarnoPoPodgrupi(pon0);
   const pods=PODGRUPE.filter(p=>(plan[p]||0)>0||(stv[p]||0)>0);
   const tp=Object.values(plan).reduce((a,b)=>a+b,0),ts=Object.values(stv).reduce((a,b)=>a+b,0);
   const planned=all.filter(s=>aktivni.includes(s.id));
@@ -975,11 +1070,12 @@ function vPregledSedmica(f){
     if(!S.sedmicniPlan)S.sedmicniPlan={};
     const cur=weeklyPlanIds().slice(),id=b.dataset.wplan,i=cur.indexOf(id);
     if(i>=0)cur.splice(i,1);else cur.push(id);
-    S.sedmicniPlan[pon0]=cur;save();render();
+    S.sedmicniPlan[pon0]=storedPlanIdsFromSnapshotIds(cur,c);save();render();
   });
   $("#view").querySelectorAll("[data-wstatus]").forEach(sel=>sel.onchange=()=>{
-    const id=sel.dataset.wstatus;
-    if(sel.value==="pending")delete statuses[id];else statuses[id]=sel.value;
+    const id=sel.dataset.wstatus,ident=workoutIdentity(id);
+    delete statuses[id];
+    if(sel.value==="pending")delete statuses[ident];else statuses[ident]=sel.value;
     save();render();
   });
 }
@@ -1370,7 +1466,13 @@ function newCycleDialog(preload=null){
     if(weekIds.some(x=>!x)){toast("Popuni sve treninge u nedelji");return}
     const name=$("#mN").value.trim();if(!name){toast("Upiši naziv");return}
     const start=monday($("#mP").value||iso(new Date())),dur=Number($("#mT").value)||9;
-    const cur=activeCycle();if(cur)cur.status="završen";
+    const cur=activeCycle();
+    const thisWeek=monday(iso(new Date()));
+    if(cur&&Array.isArray(S.sedmicniPlan&&S.sedmicniPlan[thisWeek])){
+      const oldIds=weeklyPlanIds(thisWeek,cur);
+      S.sedmicniPlan[thisWeek]=storedPlanIdsFromSnapshotIds(oldIds,cur);
+    }
+    if(cur)cur.status="završen";
     const progression={midAdd:Number($("#mMidAdd").value)||0,peakAdd:Number($("#mPeakAdd").value)||0};
     const c={id:uid(),naziv:name,pocetak:start,trajanje:dur,status:"aktivan",frekvencija:weekIds.length,sourceProgramId:preload?.id||"",programNaziv:preload?.naziv||"",progresija:progression,sabloni:librarySnapshot(weekIds,progression)};
     S.mezociklusi.push(c);S.aktivniMezociklusId=c.id;save();closeDlg();render();toast("Kreiran "+name);
