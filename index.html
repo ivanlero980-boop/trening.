@@ -59,7 +59,7 @@ nav button[aria-current="page"] .ic{color:var(--g-lite)}
 .row{display:flex;align-items:center;gap:10px}.between{justify-content:space-between}.grow{flex:1;min-width:0}.mute{color:var(--mute)}.sm{font-size:13px}.xs{font-size:11.5px;letter-spacing:.065em;text-transform:uppercase;color:var(--mute);font-weight:750}.trunc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 button.btn{background:var(--panel2);color:var(--chalk);border:1px solid var(--line);border-radius:11px;padding:11px 14px;font:650 15px inherit;cursor:pointer}
 button.btn:active{transform:scale(.985)}
-button.btn.pri{background:linear-gradient(135deg,var(--green),var(--green2));color:white;border-color:var(--g-deep);box-shadow:0 5px 16px rgba(0,107,62,.22)}
+button.btn.pri{background:linear-gradient(135deg,var(--green),var(--g-lite));color:white;border-color:var(--g-deep);box-shadow:0 5px 16px rgba(0,107,62,.22)}
 button.btn.gh{background:none}button.btn.sm{padding:7px 11px;font-size:13px;border-radius:9px}button.btn.danger{color:var(--hot)}.btnrow{display:flex;gap:8px;flex-wrap:wrap}
 input,select,textarea{background:var(--panel2);color:var(--chalk);border:1px solid var(--line);border-radius:11px;padding:11px 12px;font:16px inherit;width:100%}
 input:focus,select:focus,textarea:focus{outline:2px solid var(--g-deep);outline-offset:1px;border-color:var(--g-deep)}label.f{display:block;margin-bottom:10px}label.f>span{display:block;margin-bottom:5px}.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
@@ -261,7 +261,7 @@ input,select,textarea{
 <dialog id="dlg"><div class="sheet" id="dlgBody"></div></dialog><div class="toast" id="toast"></div>
 <script>
 "use strict";
-const KEY="trening_v1";
+const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,BUILD_ID="2026.08.30.2",BUILD_LABEL="Stabilizacija 2",BUILD_DATE="30.08.2026.";
 const CATALOG_VERSION=1;
 const PODGRUPE=["Kvadriceps","Hamstring","Gluteus","Listovi","Grudi","Leđa","Rame — front","Rame — side","Rame — rear","Biceps","Triceps","Podlaktice","Trbuh/Core","Kardio"];
 const GRUPA={Kvadriceps:"Noge",Hamstring:"Noge",Gluteus:"Noge",Listovi:"Noge",Grudi:"Grudi","Leđa":"Leđa","Rame — front":"Ramena","Rame — side":"Ramena","Rame — rear":"Ramena",Biceps:"Ruke",Triceps:"Ruke",Podlaktice:"Ruke","Trbuh/Core":"Trbuh/Core",Kardio:"Kardio"};
@@ -277,6 +277,53 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&l
 function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),1900)}
 
 let S=null;
+
+function parseNum(v){
+  if(v===null||v===undefined||String(v).trim()==="")return null;
+  const n=Number(String(v).trim().replace(",","."));
+  return Number.isFinite(n)?n:null;
+}
+let sessionSaveTimer=null;
+function sessionSave(immediate=false){
+  clearTimeout(sessionSaveTimer);
+  const write=()=>{
+    try{
+      if(sesija)localStorage.setItem(SESSION_KEY,JSON.stringify({savedAt:Date.now(),session:sesija}));
+      else localStorage.removeItem(SESSION_KEY);
+    }catch(e){}
+  };
+  if(immediate)write();
+  else sessionSaveTimer=setTimeout(write,300);
+}
+
+function sessionClear(){clearTimeout(sessionSaveTimer);try{localStorage.removeItem(SESSION_KEY)}catch(e){}}
+function pendingSession(){
+  try{
+    const raw=localStorage.getItem(SESSION_KEY);if(!raw)return null;
+    const p=JSON.parse(raw);
+    if(!p||!p.session||!p.savedAt)return null;
+    if(Date.now()-Number(p.savedAt)>12*60*60*1000){localStorage.removeItem(SESSION_KEY);return null}
+    return p;
+  }catch(e){return null}
+}
+
+document.addEventListener("visibilitychange",()=>{if(document.hidden&&sesija)sessionSave(true)});
+window.addEventListener("pagehide",()=>{if(sesija)sessionSave(true)});
+
+function stateSummary(d){
+  const sets=Array.isArray(d&&d.dnevnik)?d.dnevnik.reduce((a,l)=>a+Math.max(1,Number(l.serije)||1),0):0;
+  const cycles=Array.isArray(d&&d.mezociklusi)?d.mezociklusi.length:0;
+  const dates=Array.isArray(d&&d.dnevnik)?d.dnevnik.map(x=>x.datum).filter(Boolean).sort():[];
+  return {sets,cycles,last:dates.length?dates[dates.length-1]:"—"};
+}
+function validateImport(d){
+  if(!d||typeof d!=="object")return false;
+  if(!Array.isArray(d.vezbe)||!Array.isArray(d.dnevnik))return false;
+  const v=Number(d.schemaVersion||1);
+  if(!Number.isFinite(v)||v<1||v>SCHEMA_VERSION)return false;
+  return true;
+}
+
 function load(){try{const raw=localStorage.getItem(KEY);if(raw){S=JSON.parse(raw);return}}catch(e){}S=seed();save()}
 function activeCycle(){return S&&Array.isArray(S.mezociklusi)?S.mezociklusi.find(c=>c.id===S.aktivniMezociklusId)||S.mezociklusi.find(c=>c.status==="aktivan")||S.mezociklusi[S.mezociklusi.length-1]:null}
 function liveWorkout(snap){
@@ -323,67 +370,71 @@ function migrateProgramLibrary(){
   if(!S)return;
   if(!Array.isArray(S.programBiblioteka))S.programBiblioteka=[];
 
-  const c=activeCycle();
-  if(!c||!Array.isArray(c.sabloni)||!c.sabloni.length)return;
+  // Repair heuristics are one-time only. Never rewrite user programs on normal startup.
+  if(Number(S.migrationsVersion||0)>=MIGRATIONS_VERSION)return;
 
+  const c=activeCycle();
+  if(!c||!Array.isArray(c.sabloni)||!c.sabloni.length){
+    S.migrationsVersion=MIGRATIONS_VERSION;
+    return;
+  }
+
+  // First trust the explicit cycle -> program relationship.
+  let p=c.sourceProgramId?S.programBiblioteka.find(x=>x.id===c.sourceProgramId):null;
+
+  // For genuinely old data, accept only a program explicitly marked as auto-migrated
+  // from this exact cycle. Do not match by name and never use "the only program" fallback.
+  if(!p)p=S.programBiblioteka.find(x=>x.migratedFromCycleId===c.id);
+
+  // If a valid relationship already exists, preserve the program exactly as the user left it.
+  if(p){
+    if(!c.sourceProgramId)c.sourceProgramId=p.id;
+    if(!c.programNaziv)c.programNaziv=p.naziv;
+    if(!c.frekvencija)c.frekvencija=(p.treningIds||[]).length;
+    S.migrationsVersion=MIGRATIONS_VERSION;
+    return;
+  }
+
+  // Only legacy cycles with no linked program need an automatically created library entry.
   const weekly=S.sedmicniPlan||{};
   const d0=new Date((c.pocetak||iso(new Date()))+"T00:00:00");
   const d1=new Date(d0);d1.setDate(d1.getDate()+Number(c.trajanje||9)*7-1);
   const finish=iso(d1);
-
-  // Candidate weeks in this cycle with an explicitly saved weekly structure.
   const weeks=Object.keys(weekly)
     .filter(wk=>wk>=c.pocetak&&wk<=finish&&Array.isArray(weekly[wk])&&weekly[wk].length)
     .sort();
 
   let snapshotIds=[];
-  if(weeks.length){
-    // Prefer the most recent explicit weekly plan because it reflects the current intended structure.
-    snapshotIds=weekly[weeks[weeks.length-1]].slice();
-  }else{
-    // Compatibility fallback: infer four active workouts from names/status if no weekly plan is saved.
-    snapshotIds=c.sabloni
-      .filter(x=>!/full body c/i.test(cleanWorkoutName(x.naziv)) && x.tip!=="Rezervni")
-      .map(x=>x.id);
-  }
+  if(weeks.length)snapshotIds=weekly[weeks[weeks.length-1]].slice();
+  else snapshotIds=(c.sabloni||[])
+    .filter(x=>!/full body c/i.test(cleanWorkoutName(x.naziv))&&x.tip!=="Rezervni")
+    .map(x=>x.id);
 
   const libIds=[];
   snapshotIds.forEach(sid=>{
-    const snap=c.sabloni.find(x=>x.id===sid);
+    const snap=(c.sabloni||[]).find(x=>x.id===sid);
     if(!snap)return;
-    const clean=cleanWorkoutName(snap.naziv);
-    let lib=LIB().find(x=>x.id===snap.sourceLibraryId);
-    if(!lib)lib=LIB().find(x=>normName(cleanWorkoutName(x.naziv))===normName(clean));
+    let lib=snap.sourceLibraryId?LIB().find(x=>x.id===snap.sourceLibraryId):null;
+    if(!lib)lib=LIB().find(x=>normName(cleanWorkoutName(x.naziv))===normName(cleanWorkoutName(snap.naziv)));
     if(lib&&!libIds.includes(lib.id))libIds.push(lib.id);
   });
 
-  if(!libIds.length)return;
-
-  const name=(c.naziv||"Program")+" · "+libIds.length+"× nedeljno";
-
-  // Repair any old auto-created program for this cycle, including the earlier wrong 5× version.
-  let p=S.programBiblioteka.find(x=>x.migratedFromCycleId===c.id);
-  if(!p)p=S.programBiblioteka.find(x=>String(x.naziv||"").startsWith((c.naziv||"")+" · "));
-  if(!p && S.programBiblioteka.length===1)p=S.programBiblioteka[0];
-
-  if(p){
-    p.naziv=name;
-    p.treningIds=libIds;
-    p.frekvencija=libIds.length;
-    p.migratedFromCycleId=c.id;
-    if(!c.sourceProgramId)c.sourceProgramId=p.id;
-    if(!c.programNaziv)c.programNaziv=p.naziv;
-    if(!c.frekvencija)c.frekvencija=libIds.length;
-  }else{
+  if(libIds.length){
     const np={
-      id:uid(),naziv:name,treningIds:libIds,frekvencija:libIds.length,
-      createdAt:iso(new Date()),migratedFromCycleId:c.id
+      id:uid(),
+      naziv:(c.naziv||"Program")+" · "+libIds.length+"× nedeljno",
+      treningIds:libIds,
+      frekvencija:libIds.length,
+      createdAt:iso(new Date()),
+      migratedFromCycleId:c.id
     };
     S.programBiblioteka.push(np);
-    if(!c.sourceProgramId)c.sourceProgramId=np.id;
-    if(!c.programNaziv)c.programNaziv=np.naziv;
-    if(!c.frekvencija)c.frekvencija=libIds.length;
+    c.sourceProgramId=np.id;
+    c.programNaziv=np.naziv;
+    c.frekvencija=libIds.length;
   }
+
+  S.migrationsVersion=MIGRATIONS_VERSION;
 }
 function PROG(){return S.programBiblioteka||[]}
 function programSnapshot(p){
@@ -475,6 +526,19 @@ function migrateLegacySets(){
   if(changed)toast("Stari treninzi su prebačeni na prikaz po setovima");
 }
 
+
+function runMigrations(){
+  migrateExerciseCatalog();
+  migrateCycles();
+  migrateWorkoutLibrary();
+  if(!Array.isArray(S.programBiblioteka))S.programBiblioteka=[];
+  migrateProgramLibrary();
+  migrateLegacySets();
+  volumeTargets();
+  if(!S.schemaVersion||S.schemaVersion<SCHEMA_VERSION)S.schemaVersion=SCHEMA_VERSION;
+  save();
+}
+
 function seed(){
   const enrich={
     "Hack squat":["Sprava","Samo dodati tegovi. Naziv sprave u napomenu."],"Leg press":["Sprava","Samo dodati tegovi."],"Goblet čučanj":["Bučice",""] ,"Ekstenzija nogu":["Sprava",""] ,"Smith čučanj":["Smith","Ukupno sa šipkom; Smith šipka je lakša od olimpijske."],"Iskorak":["Bučice",""] ,"Rumunsko mrtvo dizanje":["Bučice",""] ,"Pregib nogu (sedeći)":["Sprava",""] ,"Good morning":["Šipka",""] ,"Leđna ekstenzija":["Sopstvena težina",""] ,"Bugarski čučanj":["Bučice","Ukupno obe bučice; po nozi u napomenu."],"Hip thrust":["Šipka",""] ,"Zanoženje na sajli":["Sajla",""] ,"Podizanje na prste (stojeći)":["Sprava",""] ,"Potisak na spravi":["Sprava","Technogym chest press."],"Smith potisak":["Smith","Ukupno sa šipkom, naznačiti Smith."],"Kosi bench (bučice)":["Bučice","Ukupno obe bučice; po ruci u napomenu."],"Peck deck":["Sprava",""] ,"Razvlačenje na Kinesis mašini":["Kinesis","Kilaža nije uporediva sa sajlom."],"Razvlačenje na sajli":["Sajla",""] ,"Bench press (bučice)":["Bučice",""] ,"Kosi bench (šipka)":["Šipka",""] ,"Sklekovi":["Sopstvena težina",""] ,"Veslanje na sajli":["Sajla",""] ,"Lat mašina":["Sprava",""] ,"Zgib (asistirani)":["Sprava","Telesna težina minus protivteg; protivteg u napomenu."],"Veslanje (bučice, klupa 30°)":["Bučice","Obe ruke, grudi naslonjene."],"Zgib":["Sopstvena težina",""] ,"Vertical traction (Technogym)":["Sprava","Putanja blago ispred ramena — blaža za rame."],"Low row (Technogym)":["Sprava",""] ,"Pullover":["Bučice",""] ,"Veslanje (šipka)":["Šipka",""] ,"Potisak iznad glave (bučice)":["Bučice",""] ,"Arnold potisak":["Bučice",""] ,"Prednje podizanje":["Bučice",""] ,"Bočno podizanje (bučice)":["Bučice","Ne dizati iznad visine ramena."],"Bočno podizanje na sajli":["Sajla",""] ,"Bočno podizanje na mašini":["Sprava",""] ,"Face pull":["Sajla",""] ,"Reverse peck deck":["Sprava",""] ,"Reverse fly (bučice)":["Bučice",""] ,"Biceps pregib (bučice)":["Bučice",""] ,"Biceps pregib (šipka)":["Šipka",""] ,"Čekić pregib":["Bučice",""] ,"Scott klupa":["Šipka",""] ,"Pregib na sajli":["Sajla",""] ,"Triceps ekstenzija na sajli":["Sajla",""] ,"Skull crusher":["Šipka","Ležeći, ruke ka čelu. Blaže za rame."],"Francuski potisak":["Bučice","Ruke iznad glave — duga glava tricepsa."],"Propadanje":["Sopstvena težina","Telesna težina plus dodatni teg."],"Usko potiskivanje":["Šipka",""] ,"Pregib zgloba":["Bučice",""] ,"Trbuh — po izboru":["","Mestočuvar — vežbu biraš na treningu."],"Plank":["Sopstvena težina",""] ,"Podizanje nogu":["Sopstvena težina",""] ,"Trbušnjaci":["Sopstvena težina",""] ,"Rusko okretanje":["Bučice",""] ,"Ab wheel":["Sopstvena težina",""] ,"Cable crunch":["Sajla",""] ,"Bočni plank":["Sopstvena težina",""] ,"Traka za trčanje":["Kardio",""] ,"Sobni bicikl":["Kardio",""] ,"Veslački ergometar":["Kardio",""] ,"Plivanje":["Kardio",""]
@@ -549,7 +613,7 @@ function detaljTreninga(d){
   $("#hNazad").onclick=()=>go("danas");
   $("#view").querySelectorAll("input[data-h]").forEach(inp=>inp.onchange=()=>{
     const[id,k]=inp.dataset.h.split(":");const l=S.dnevnik.find(x=>x.id===id);if(!l)return;
-    l[k]=inp.value===""?null:Number(inp.value);save();
+    const parsed=parseNum(inp.value);if(k==="kg"&&inp.value.trim()!==""&&parsed===null){inp.style.borderColor="var(--hot)";toast("Neispravan broj");return}l[k]=k==="kg"?parsed:(inp.value===""?null:Number(inp.value));inp.style.borderColor="";save();
   });
   $("#view").querySelectorAll("[data-dell]").forEach(b=>b.onclick=()=>{
     if(!confirm("Obrisati ovaj set?"))return;
@@ -604,13 +668,13 @@ function vDanas(f){
         const g=GRUPA[vpod(x.vezbaId)]||vpod(x.vezbaId);
         ciljevi[g]=(ciljevi[g]||0)+planSerija(x,f);
       });
-      sesija={datum:$("#dDatum").value,sabId:real.id,custom:true,startTs:Date.now(),ciljevi,stavke:[]};
+      sesija={datum:$("#dDatum").value,sabId:real.id,custom:true,startTs:Date.now(),ciljevi,stavke:[]};sessionSave();
       render();
     };
     $("#dStart").onclick=()=>{
       const real=SAB().find(x=>x.id===$("#dSab").value);if(!real){toast("Trening nije pronađen");return}
       const datum=$("#dDatum").value;
-      sesija={datum,sabId:real.id,sourceLibraryId:real.sourceLibraryId||"",startTs:Date.now(),stavke:real.stavke.map(s=>{const plan=planSerija(s,f);return{vezbaId:s.vezbaId,plan,pon:s.pon,odmor:s.odmor,unosi:makeSetRows(s.vezbaId,plan,datum)}})};
+      sesija={datum,sabId:real.id,sourceLibraryId:real.sourceLibraryId||"",startTs:Date.now(),stavke:real.stavke.map(s=>{const plan=planSerija(s,f);return{vezbaId:s.vezbaId,plan,pon:s.pon,odmor:s.odmor,unosi:makeSetRows(s.vezbaId,plan,datum)}})};sessionSave();
       render();
     };
     return;
@@ -627,22 +691,22 @@ function vDanas(f){
     </div>`:""}
     <div class="list">${sesija.stavke.map((s,i)=>kartStavka(s,i)).join("")}</div>
     ${sesija.custom&&!sesija.stavke.length?`<div class="empty">Dodaj vježbe koje su dostupne u ovoj teretani. Cilj iznad prati planirane setove po mišićnim grupama.</div>`:""}<button class="btn gh" style="width:100%;margin-top:8px" id="dodajVezbu">+ Dodaj vežbu u ovaj trening</button><button class="btn pri" style="width:100%;margin-top:10px" id="sacuvaj">Završi trening</button>`;
-  $("#odustani").onclick=()=>{if(confirm("Odbaciti ovaj trening?")){sesija=null;render()}};
-  $("#dodajVezbu").onclick=()=>pickVezba(null,id=>{sesija.stavke.push({vezbaId:id,plan:3,pon:"",odmor:"",unosi:makeSetRows(id,3,sesija.datum)});render()});
+  $("#odustani").onclick=()=>{if(confirm("Odbaciti ovaj trening?")){sesija=null;sessionClear();render()}};
+  $("#dodajVezbu").onclick=()=>pickVezba(null,id=>{sesija.stavke.push({vezbaId:id,plan:3,pon:"",odmor:"",unosi:makeSetRows(id,3,sesija.datum)});sessionSave();render()});
   $("#sacuvaj").onclick=()=>finishWorkout(sab);
-  v.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>{const s=sesija.stavke[+b.dataset.add],last=s.unosi[s.unosi.length-1];s.unosi.push({kg:last?.kg??lastKg(s.vezbaId),pon:"",nap:"",rir:""});CTX.keepScroll=1;render();CTX.keepScroll=0});
-  v.querySelectorAll("[data-same]").forEach(b=>b.onclick=()=>{const[i,j]=b.dataset.same.split(":").map(Number),rows=sesija.stavke[i].unosi;if(j<1)return;rows[j].kg=rows[j-1].kg;rows[j].pon=rows[j-1].pon;CTX.keepScroll=1;render();CTX.keepScroll=0});
-  v.querySelectorAll("[data-swap]").forEach(b=>b.onclick=()=>{const i=+b.dataset.swap;pickVezba(vpod(sesija.stavke[i].vezbaId),id=>{const s=sesija.stavke[i];s.vezbaId=id;s.unosi=makeSetRows(id,s.plan,sesija.datum);render()})});
-  v.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{const[i,j]=b.dataset.del.split(":").map(Number);sesija.stavke[i].unosi.splice(j,1);CTX.keepScroll=1;render();CTX.keepScroll=0});
+  v.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>{const s=sesija.stavke[+b.dataset.add],last=s.unosi[s.unosi.length-1];s.unosi.push({kg:last?.kg??lastKg(s.vezbaId),pon:"",nap:"",rir:""});sessionSave();CTX.keepScroll=1;render();CTX.keepScroll=0});
+  v.querySelectorAll("[data-same]").forEach(b=>b.onclick=()=>{const[i,j]=b.dataset.same.split(":").map(Number),rows=sesija.stavke[i].unosi;if(j<1)return;rows[j].kg=rows[j-1].kg;rows[j].pon=rows[j-1].pon;sessionSave();CTX.keepScroll=1;render();CTX.keepScroll=0});
+  v.querySelectorAll("[data-swap]").forEach(b=>b.onclick=()=>{const i=+b.dataset.swap;pickVezba(vpod(sesija.stavke[i].vezbaId),id=>{const s=sesija.stavke[i];s.vezbaId=id;s.unosi=makeSetRows(id,s.plan,sesija.datum);sessionSave();render()})});
+  v.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{const[i,j]=b.dataset.del.split(":").map(Number);sesija.stavke[i].unosi.splice(j,1);sessionSave();CTX.keepScroll=1;render();CTX.keepScroll=0});
 
   v.querySelectorAll("[data-rir]").forEach(b=>b.onclick=()=>{
     const [i,j,r]=b.dataset.rir.split(":");
     const u=sesija.stavke[+i].unosi[+j];
-    u.rir=(u.rir===r?"":r);
+    u.rir=(u.rir===r?"":r);sessionSave();
     CTX.keepScroll=1;render();CTX.keepScroll=0;
   });
 
-  v.querySelectorAll("input[data-f]").forEach(inp=>inp.oninput=()=>{const[i,j,k]=inp.dataset.f.split(":");sesija.stavke[+i].unosi[+j][k]=inp.value});
+  v.querySelectorAll("input[data-f]").forEach(inp=>inp.oninput=()=>{const[i,j,k]=inp.dataset.f.split(":");sesija.stavke[+i].unosi[+j][k]=inp.value;sessionSave()});
 }
 function lastKg(vid){const l=S.dnevnik.filter(x=>x.vezbaId===vid).sort((a,b)=>a.datum<b.datum?1:-1)[0];return l&&l.kg!=null?l.kg:""}
 function kartStavka(s,i){
@@ -717,7 +781,7 @@ function finishWorkout(sab){
   const session=sesija,records=[],groupDone={},exerciseDone=[];
   session.stavke.forEach(s=>{
     const sets=completedSets(s);if(!sets.length)return;
-    sets.forEach(u=>records.push({id:uid(),datum:session.datum,mezociklusId:(activeCycle()||{}).id,vezbaId:s.vezbaId,serije:1,pon:Number(u.pon)||null,kg:u.kg===""?null:Number(u.kg),napomena:u.nap||"",rir:u.rir||"",sabId:session.sabId||"",originalSabId:session.sabId||"",custom:!!session.custom}));
+    sets.forEach(u=>records.push({id:uid(),datum:session.datum,mezociklusId:(activeCycle()||{}).id,vezbaId:s.vezbaId,serije:1,pon:Number(u.pon)||null,kg:parseNum(u.kg),napomena:u.nap||"",rir:u.rir||"",sabId:session.sabId||"",originalSabId:session.sabId||"",custom:!!session.custom}));
     const g=GRUPA[vpod(s.vezbaId)]||vpod(s.vezbaId)||"Ostalo";groupDone[g]=(groupDone[g]||0)+sets.length;
     exerciseDone.push({vezbaId:s.vezbaId,sets,plan:s.plan,ponTarget:s.pon});
   });
@@ -732,7 +796,7 @@ function finishWorkout(sab){
   const progress=[];
   exerciseDone.forEach(x=>{
     const prev=previousWorkoutSets(x.vezbaId,session.datum);if(!prev.length)return;
-    const cur=x.sets.map(u=>({kg:u.kg===""?0:Number(u.kg)||0,pon:Number(u.pon)||0}));
+    const cur=x.sets.map(u=>({kg:parseNum(u.kg)||0,pon:Number(u.pon)||0}));
     const best=a=>a.reduce((b,z)=>(z.kg>b.kg||(z.kg===b.kg&&z.pon>b.pon))?z:b,{kg:0,pon:0});
     const a=best(cur),b=best(prev.map(z=>({kg:Number(z.kg)||0,pon:Number(z.pon)||0})));
     if(a.kg>b.kg)progress.push(`${vname(x.vezbaId)} · +${(a.kg-b.kg).toFixed(1).replace('.0','')} kg`);
@@ -746,7 +810,7 @@ function finishWorkout(sab){
     if(a)advice.push(a);
   });
 
-  sesija=null;
+  sesija=null;sessionClear();
   showWorkoutSummary({naziv:sab?sab.naziv:"Trening",datum:session.datum,dur,actual,planAll,volume,groupDone,progress,prs,advice});
 }
 
@@ -1175,7 +1239,7 @@ let filtP="";
 function vVezbe(){if(CTX.vez)return detaljVezbe(CTX.vez);const list=S.vezbe.filter(v=>!filtP||v.podgrupa===filtP).sort((a,b)=>a.podgrupa===b.podgrupa?a.naziv.localeCompare(b.naziv,"sr"):PODGRUPE.indexOf(a.podgrupa)-PODGRUPE.indexOf(b.podgrupa));$("#view").innerHTML=`<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;margin-bottom:4px"><button class="chip ${filtP?"":"on"}" data-p="">Sve</button>${PODGRUPE.map(p=>`<button class="chip ${filtP===p?"on":""}" data-p="${esc(p)}" style="white-space:nowrap">${esc(p)}</button>`).join("")}</div><div class="list">${list.map(v=>`<div class="card tight" data-v="${v.id}" style="cursor:pointer"><div class="row between"><div class="grow trunc"><b>${esc(v.naziv)}</b><div class="sm mute">${esc(v.podgrupa)}${v.oprema?" · "+esc(v.oprema):""}</div></div><span class="mute">›</span></div></div>`).join("")||`<div class="empty">Nema vežbi u ovoj podgrupi.</div>`}</div><button class="btn gh" style="width:100%;margin-top:10px" id="nova">+ Nova vežba</button>`;$("#view").querySelectorAll("[data-p]").forEach(b=>b.onclick=()=>{filtP=b.dataset.p;render()});$("#view").querySelectorAll("[data-v]").forEach(c=>c.onclick=()=>go("vezbe",{vez:c.dataset.v,title:"Vežba"}));$("#nova").onclick=()=>formaVezbe(null)}
 let vezCycle="all";
 function detaljVezbe(id){const v=vez(id);if(!v){go("vezbe");return}const cycles=[...(S.mezociklusi||[])].sort((a,b)=>(a.pocetak||"").localeCompare(b.pocetak||"")),all=S.dnevnik.filter(l=>l.vezbaId===id),logs=all.filter(l=>vezCycle==="all"||l.mezociklusId===vezCycle),tjed={};logs.forEach(l=>{const m=monday(l.datum);if(!tjed[m])tjed[m]={kg:0,ser:0};tjed[m].ser+=Number(l.serije||0);if(l.kg!=null&&l.kg>tjed[m].kg)tjed[m].kg=l.kg});const ned=Object.keys(tjed).sort().slice(-10);const stats=cycles.map(c=>{const a=all.filter(l=>l.mezociklusId===c.id);if(!a.length)return null;const kg=Math.max(...a.filter(x=>x.kg!=null).map(x=>Number(x.kg)),0),pon=Math.max(...a.filter(x=>Number(x.kg)===kg).map(x=>Number(x.pon)||0),0),ser=a.reduce((z,x)=>z+Number(x.serije||0),0);return{c,kg,pon,ser}}).filter(Boolean);$("#view").innerHTML=`<button class="btn sm gh" id="nazad" style="margin-bottom:10px">‹ Sve vežbe</button><div class="card"><h2 style="font-size:20px">${esc(v.naziv)}</h2><div class="sm mute" style="margin-top:4px">${esc(v.podgrupa)} · ${esc(GRUPA[v.podgrupa]||"")}${v.oprema?" · "+esc(v.oprema):""}</div>${v.napomena?`<div class="sm" style="margin-top:10px;color:var(--steel)">${esc(v.napomena)}</div>`:""}<div class="btnrow" style="margin-top:12px"><button class="btn sm" id="uredi">Uredi</button></div></div><div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:10px"><button class="chip ${vezCycle==="all"?"on":""}" data-mc="all">Sve</button>${cycles.map(c=>`<button class="chip ${vezCycle===c.id?"on":""}" data-mc="${c.id}" style="white-space:nowrap">${esc(c.naziv)}</button>`).join("")}</div>${stats.length>1?`<div class="card"><div class="xs" style="margin-bottom:8px">Poređenje mezociklusa</div>${stats.map(x=>`<div class="row between" style="padding:7px 0;border-top:1px solid var(--line)"><div><b>${esc(x.c.naziv)}</b><div class="sm mute">${x.ser} radnih serija</div></div><div style="text-align:right"><span class="num">${x.kg||"—"}</span><span class="sm mute"> kg</span><div class="sm mute">${x.pon?x.pon+" pon. na toj težini":""}</div></div></div>`).join("")}</div>`:""}${ned.length?`<div class="card"><div class="xs" style="margin-bottom:10px">Najveća težina po nedeljama</div>${chart(ned.map(n=>tjed[n].kg))}<div class="row between sm mute" style="margin-top:6px"><span>${dmy(ned[0])}</span><span>${dmy(ned[ned.length-1])}</span></div></div>`:""}<div class="xs" style="margin:16px 0 8px">Istorija</div><div class="list">${logs.sort((a,b)=>a.datum<b.datum?1:-1).slice(0,40).map(l=>`<div class="card tight"><div class="row between"><div class="grow"><b class="num">${l.serije} × ${l.pon??"—"}</b><span class="mute sm"> · ${l.kg!=null?l.kg+" kg":"bez tega"}</span>${l.napomena?`<div class="sm mute trunc">${esc(l.napomena)}</div>`:""}</div><div class="sm mute">${dmy(l.datum)}</div></div></div>`).join("")||`<div class="empty">Nema unosa za ovu vežbu.</div>`}</div>`;$("#nazad").onclick=()=>{vezCycle="all";go("vezbe")};$("#uredi").onclick=()=>formaVezbe(v);$("#view").querySelectorAll("[data-mc]").forEach(b=>b.onclick=()=>{vezCycle=b.dataset.mc;render()})}
-function chart(vals){if(!vals.length)return"";const w=300,h=110,mx=Math.max(...vals,1),mn=Math.min(...vals.filter(x=>x>0),mx),lo=Math.max(0,mn-(mx-mn||mx*.15)*.4),hi=mx+(mx-lo)*.12||1,pt=vals.map((v,i)=>[vals.length>1?i/(vals.length-1)*w:w/2,h-(v-lo)/(hi-lo)*h]),d=pt.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");return `<svg class="chart" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><path d="${d}" fill="none" stroke="var(--green2)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>${pt.map(p=>`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3" fill="var(--green2)"/>`).join("")}</svg>`}
+function chart(vals){if(!vals.length)return"";const w=300,h=110,mx=Math.max(...vals,1),mn=Math.min(...vals.filter(x=>x>0),mx),lo=Math.max(0,mn-(mx-mn||mx*.15)*.4),hi=mx+(mx-lo)*.12||1,pt=vals.map((v,i)=>[vals.length>1?i/(vals.length-1)*w:w/2,h-(v-lo)/(hi-lo)*h]),d=pt.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");return `<svg class="chart" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><path d="${d}" fill="none" stroke="var(--g-lite)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>${pt.map(p=>`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3" fill="var(--g-lite)"/>`).join("")}</svg>`}
 function formaVezbe(v){openDlg(`<h2 style="font-size:18px;margin-bottom:12px">${v?"Uredi vežbu":"Nova vežba"}</h2><label class="f"><span class="sm mute">Naziv</span><input id="fN" value="${v?esc(v.naziv):""}"></label><label class="f"><span class="sm mute">Podgrupa</span><select id="fP">${PODGRUPE.map(p=>`<option ${v&&v.podgrupa===p?"selected":""}>${p}</option>`).join("")}</select></label><label class="f"><span class="sm mute">Oprema</span><select id="fO">${["","Sprava","Bučice","Šipka","Sajla","Smith","Kinesis","Sopstvena težina","Elastika","Kardio"].map(o=>`<option ${v&&v.oprema===o?"selected":""}>${o}</option>`).join("")}</select></label><label class="f"><span class="sm mute">Napomena</span><textarea id="fZ" rows="2">${v?esc(v.napomena):""}</textarea></label><div class="btnrow" style="margin-top:4px"><button class="btn pri grow" id="fS">Sačuvaj</button><button class="btn gh" id="fC">Otkaži</button>${v?`<button class="btn gh danger" id="fD">Obriši</button>`:""}</div>`);$("#fC").onclick=closeDlg;$("#fS").onclick=()=>{const n=$("#fN").value.trim();if(!n){toast("Upiši naziv");return}if(v)Object.assign(v,{naziv:n,podgrupa:$("#fP").value,oprema:$("#fO").value,napomena:$("#fZ").value});else S.vezbe.push({id:uid(),naziv:n,podgrupa:$("#fP").value,oprema:$("#fO").value,napomena:$("#fZ").value});save();closeDlg();render();toast("Sačuvano")};if(v)$("#fD").onclick=()=>{if(S.dnevnik.some(l=>l.vezbaId===v.id)){toast("Ne može — vežba ima unose u dnevniku");return}if(confirm("Obrisati vežbu?")){S.vezbe=S.vezbe.filter(x=>x.id!==v.id);save();closeDlg();go("vezbe")}}}
 function pickVezba(pod,cb){let f=pod||"";const draw=()=>{const l=S.vezbe.filter(v=>!f||v.podgrupa===f).sort((a,b)=>a.naziv.localeCompare(b.naziv,"sr"));$("#dlgBody").innerHTML=`<h2 style="font-size:18px;margin-bottom:10px">Izaberi vežbu</h2><div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:10px"><button class="chip ${f?"":"on"}" data-p="">Sve</button>${PODGRUPE.map(p=>`<button class="chip ${f===p?"on":""}" data-p="${esc(p)}" style="white-space:nowrap">${esc(p)}</button>`).join("")}</div><div class="list" style="max-height:46vh;overflow:auto">${l.map(v=>`<div class="card tight" data-pick="${v.id}" style="cursor:pointer;margin:0"><b>${esc(v.naziv)}</b><div class="sm mute">${esc(v.podgrupa)}</div></div>`).join("")||`<div class="empty">Nema vežbi.</div>`}</div><button class="btn gh" style="width:100%;margin-top:10px" id="pC">Otkaži</button>`;$("#dlgBody").querySelectorAll("[data-p]").forEach(b=>b.onclick=()=>{f=b.dataset.p;draw()});$("#dlgBody").querySelectorAll("[data-pick]").forEach(b=>b.onclick=()=>{closeDlg();cb(b.dataset.pick)});$("#pC").onclick=closeDlg};$("#dlg").showModal();draw()}
 
@@ -1324,9 +1388,17 @@ function trainingsSinceBackup(){
   return Math.max(0,now-base);
 }
 
-function vVise(f){if(CTX.mc){const c=cycleById(CTX.mc);if(c)return cycleDetail(c)}const c=activeCycle(),uk=S.dnevnik.reduce((a,l)=>a+Number(l.serije||0),0),dana=new Set(S.dnevnik.map(l=>l.datum)).size,cycles=[...(S.mezociklusi||[])].sort((a,b)=>(b.pocetak||"").localeCompare(a.pocetak||""));$("#view").innerHTML=`<div class="card"><div class="row between"><div><div class="xs">Aktivni mezociklus</div><h2 style="font-size:20px;margin-top:3px">${esc(c?c.naziv:"—")}</h2><div class="sm mute">${c?dmy(c.pocetak)+" · "+c.trajanje+" nedelja":""}</div></div><span class="chip on">${c?esc(f.ime):"—"}</span></div><div class="btnrow" style="margin-top:14px"><button class="btn grow" id="cEdit">Uredi</button><button class="btn pri grow" id="cNovi">+ Novi mezociklus</button></div></div><div class="xs" style="margin:16px 0 8px">Istorija mezociklusa</div><div class="list">${cycles.map(x=>{const l=logsForCycle(x.id),sets=l.reduce((a,z)=>a+Number(z.serije||0),0);return `<div class="card tight" data-mcopen="${x.id}" style="cursor:pointer"><div class="row between"><div><b>${esc(cleanWorkoutName(x.naziv))}</b><div class="sm mute">${dmy(x.pocetak)} · ${new Set(l.map(z=>z.datum)).size} treninga · ${sets} serija</div></div><span class="chip ${x.id===S.aktivniMezociklusId?"on":""}">${x.id===S.aktivniMezociklusId?"aktivan":"završen"}</span></div></div>`}).join("")}</div><div class="card" style="margin-top:14px"><div class="xs" style="margin-bottom:8px">Ukupno u aplikaciji</div><div class="g3"><div><div class="num" style="font-size:24px">${dana}</div><div class="sm mute">treninga</div></div><div><div class="num" style="font-size:24px">${uk}</div><div class="sm mute">serija</div></div><div><div class="num" style="font-size:24px">${S.vezbe.length}</div><div class="sm mute">vežbi</div></div></div></div><div class="card"><div class="row between"><div><div class="xs">Konfigurator</div><b>Ciljni volumen</b><div class="sm mute">Raspon setova po mišićnoj podgrupi</div></div><button class="btn gh" id="volTargets">Uredi</button></div></div><div class="card"><div class="xs" style="margin-bottom:8px">Rezervna kopija</div>${trainingsSinceBackup()>=10?`<div style="padding:9px 10px;margin-bottom:10px;border:1px solid var(--amber);border-radius:9px"><b>Vrijeme je za sigurnosnu kopiju</b><div class="sm mute">${trainingsSinceBackup()} treninga od posljednjeg izvoza.</div></div>`:""}<div class="sm mute" style="margin-bottom:10px">Podaci žive samo na ovom telefonu. Napravi kopiju s vremena na vreme.</div><div class="btnrow"><button class="btn grow" id="exp">Izvezi podatke</button><button class="btn gh grow" id="imp">Uvezi</button></div><input type="file" id="impF" accept="application/json" hidden></div><button class="btn gh danger" style="width:100%" id="reset">Obriši sve podatke</button>`;$("#cEdit").onclick=()=>editCycleDialog(c);$("#cNovi").onclick=newCycleDialog;$("#volTargets").onclick=editVolumeTargets;$("#view").querySelectorAll("[data-mcopen]").forEach(x=>x.onclick=()=>go("vise",{mc:x.dataset.mcopen,title:"Mezociklus"}));$("#exp").onclick=()=>{S._backupTrainingCount=backupTrainingCount();S._lastBackup=iso(new Date());save();const b=new Blob([JSON.stringify(S,null,1)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="trening-"+iso(new Date())+".json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3000)};$("#imp").onclick=()=>$("#impF").click();$("#impF").onchange=e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.vezbe||!d.dnevnik)throw 0;if(confirm("Zameniti sve trenutne podatke uvezenim?")){S=d;migrateExerciseCatalog();migrateCycles();migrateWorkoutLibrary();migrateLegacySets();volumeTargets();save();render();toast("Uvezeno")}}catch(err){toast("Fajl nije ispravan")}};r.readAsText(file)};$("#reset").onclick=()=>{if(confirm("Obrisati sve? Ovo se ne može poništiti.")&&confirm("Sigurno? Napravi kopiju pre brisanja.")){localStorage.removeItem(KEY);load();migrateExerciseCatalog();migrateCycles();migrateWorkoutLibrary();migrateLegacySets();volumeTargets();render();toast("Obrisano")}}}
+function vVise(f){if(CTX.mc){const c=cycleById(CTX.mc);if(c)return cycleDetail(c)}const c=activeCycle(),uk=S.dnevnik.reduce((a,l)=>a+Number(l.serije||0),0),dana=new Set(S.dnevnik.map(l=>l.datum)).size,cycles=[...(S.mezociklusi||[])].sort((a,b)=>(b.pocetak||"").localeCompare(a.pocetak||""));$("#view").innerHTML=`<div class="card"><div class="row between"><div><div class="xs">Aktivni mezociklus</div><h2 style="font-size:20px;margin-top:3px">${esc(c?c.naziv:"—")}</h2><div class="sm mute">${c?dmy(c.pocetak)+" · "+c.trajanje+" nedelja":""}</div></div><span class="chip on">${c?esc(f.ime):"—"}</span></div><div class="btnrow" style="margin-top:14px"><button class="btn grow" id="cEdit">Uredi</button><button class="btn pri grow" id="cNovi">+ Novi mezociklus</button></div></div><div class="xs" style="margin:16px 0 8px">Istorija mezociklusa</div><div class="list">${cycles.map(x=>{const l=logsForCycle(x.id),sets=l.reduce((a,z)=>a+Number(z.serije||0),0);return `<div class="card tight" data-mcopen="${x.id}" style="cursor:pointer"><div class="row between"><div><b>${esc(cleanWorkoutName(x.naziv))}</b><div class="sm mute">${dmy(x.pocetak)} · ${new Set(l.map(z=>z.datum)).size} treninga · ${sets} serija</div></div><span class="chip ${x.id===S.aktivniMezociklusId?"on":""}">${x.id===S.aktivniMezociklusId?"aktivan":"završen"}</span></div></div>`}).join("")}</div><div class="card" style="margin-top:14px"><div class="xs" style="margin-bottom:8px">Ukupno u aplikaciji</div><div class="g3"><div><div class="num" style="font-size:24px">${dana}</div><div class="sm mute">treninga</div></div><div><div class="num" style="font-size:24px">${uk}</div><div class="sm mute">serija</div></div><div><div class="num" style="font-size:24px">${S.vezbe.length}</div><div class="sm mute">vežbi</div></div></div></div><div class="card"><div class="row between"><div><div class="xs">Konfigurator</div><b>Ciljni volumen</b><div class="sm mute">Raspon setova po mišićnoj podgrupi</div></div><button class="btn gh" id="volTargets">Uredi</button></div></div><div class="card"><div class="row between"><div><div class="xs">Verzija aplikacije</div><b>${esc(BUILD_LABEL)}</b><div class="sm mute">Build ${esc(BUILD_ID)} · ${esc(BUILD_DATE)}</div></div><span class="chip">PWA</span></div></div><div class="card"><div class="xs" style="margin-bottom:8px">Rezervna kopija</div>${trainingsSinceBackup()>=10?`<div style="padding:9px 10px;margin-bottom:10px;border:1px solid var(--amber);border-radius:9px"><b>Vrijeme je za sigurnosnu kopiju</b><div class="sm mute">${trainingsSinceBackup()} treninga od posljednjeg izvoza.</div></div>`:""}<div class="sm mute" style="margin-bottom:10px">Podaci žive samo na ovom telefonu. Napravi kopiju s vremena na vreme.</div><div class="btnrow"><button class="btn grow" id="exp">Izvezi podatke</button><button class="btn gh grow" id="imp">Uvezi</button></div>${localStorage.getItem(PREIMPORT_KEY)?`<button class="btn gh" style="width:100%;margin-top:8px" id="restorePreImport">Vrati stanje prije posljednjeg importa</button>`:""}<input type="file" id="impF" accept="application/json" hidden></div><button class="btn gh danger" style="width:100%" id="reset">Obriši sve podatke</button>`;$("#cEdit").onclick=()=>editCycleDialog(c);$("#cNovi").onclick=newCycleDialog;$("#volTargets").onclick=editVolumeTargets;$("#view").querySelectorAll("[data-mcopen]").forEach(x=>x.onclick=()=>go("vise",{mc:x.dataset.mcopen,title:"Mezociklus"}));$("#exp").onclick=()=>{S.schemaVersion=SCHEMA_VERSION;S._backupTrainingCount=backupTrainingCount();S._lastBackup=iso(new Date());save();const b=new Blob([JSON.stringify(S,null,1)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="trening-"+iso(new Date())+".json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3000)};$("#imp").onclick=()=>$("#impF").click();$("#impF").onchange=e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!validateImport(d))throw 0;const incoming=stateSummary(d),current=stateSummary(S);const msg=`Uvozim ${incoming.sets} setova, ${incoming.cycles} mezociklusa, posljednji trening ${incoming.last}.\n\nTrenutno imaš ${current.sets} setova i ${current.cycles} mezociklusa.\n\nZameniti trenutne podatke?`;if(confirm(msg)){localStorage.setItem(PREIMPORT_KEY,JSON.stringify(S));S=d;runMigrations();render();toast("Uvezeno · prethodno stanje sačuvano")}}catch(err){toast("Fajl nije ispravan ili verzija nije podržana")}};r.readAsText(file)};const rp=$("#restorePreImport");if(rp)rp.onclick=()=>{if(!confirm("Vratiti stanje prije posljednjeg importa?"))return;try{const raw=localStorage.getItem(PREIMPORT_KEY);const d=JSON.parse(raw);if(!validateImport(d))throw 0;S=d;runMigrations();render();toast("Prethodno stanje vraćeno")}catch(e){toast("Sačuvano stanje nije ispravno")}};$("#reset").onclick=()=>{if(confirm("Obrisati sve? Ovo se ne može poništiti.")&&confirm("Sigurno? Napravi kopiju pre brisanja.")){localStorage.removeItem(KEY);sessionClear();load();runMigrations();render();toast("Obrisano")}}}
 function openDlg(html){$("#dlgBody").innerHTML=html;$("#dlg").showModal()}function closeDlg(){$("#dlg").close()}$("#dlg").addEventListener("click",e=>{if(e.target===$("#dlg"))closeDlg()});
-load();migrateExerciseCatalog();migrateCycles();migrateWorkoutLibrary();migrateProgramLibrary();save();save();render();
+load();runMigrations();render();
+const pending=pendingSession();
+if(pending){
+  const s=pending.session;
+  const when=new Date(s.startTs||pending.savedAt);
+  const hh=String(when.getHours()).padStart(2,"0"),mm=String(when.getMinutes()).padStart(2,"0");
+  if(confirm(`Imaš nezavršen trening od ${hh}:${mm}. Nastavi?`)){sesija=s;go("danas")}
+  else if(confirm("Odbaciti sačuvani nezavršeni trening?"))sessionClear();
+}
 if("serviceWorker" in navigator){
   window.addEventListener("load",async()=>{
     try{
