@@ -261,7 +261,7 @@ input,select,textarea{
 <dialog id="dlg"><div class="sheet" id="dlgBody"></div></dialog><div class="toast" id="toast"></div>
 <script>
 "use strict";
-const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,BUILD_ID="2026.08.30.7.3",BUILD_LABEL="Iteracija 7.3",BUILD_DATE="30.08.2026.";
+const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,BUILD_ID="2026.08.30.7.4",BUILD_LABEL="Iteracija 7.4",BUILD_DATE="30.08.2026.";
 const CATALOG_VERSION=1;
 const PODGRUPE=["Kvadriceps","Hamstring","Gluteus","Listovi","Grudi","Leđa","Rame — front","Rame — side","Rame — rear","Biceps","Triceps","Podlaktice","Trbuh/Core","Kardio"];
 const GRUPA={Kvadriceps:"Noge",Hamstring:"Noge",Gluteus:"Noge",Listovi:"Noge",Grudi:"Grudi","Leđa":"Leđa","Rame — front":"Ramena","Rame — side":"Ramena","Rame — rear":"Ramena",Biceps:"Ruke",Triceps:"Ruke",Podlaktice:"Ruke","Trbuh/Core":"Trbuh/Core",Kardio:"Kardio"};
@@ -606,7 +606,7 @@ function logsForCycle(id){return S.dnevnik.filter(l=>l.mezociklusId===id)}
 function volumeProgramCard(){const c=activeCycle(),prev=previousCycle(c),sabs=SAB(),B=groupFromSub(planByKey(sabs,"b")),M=groupFromSub(planByKey(sabs,"t3")),V=groupFromSub(planByKey(sabs,"t5")),PB=prev?groupFromSub(planByKey(prev.sabloni,"b")):{},PM=prev?groupFromSub(planByKey(prev.sabloni,"t3")):{},PV=prev?groupFromSub(planByKey(prev.sabloni,"t5")):{};const rows=GRUPE_ORDER.filter(g=>(B[g]||M[g]||V[g]||PB[g]||PM[g]||PV[g]));return `<div class="card"><div class="row between"><div><div class="xs">Sedmični volumen programa</div><b>${esc(c?c.naziv:"")}</b></div><span class="chip">Baza · sredina · vrh</span></div><div style="margin-top:10px">${rows.map(g=>{const cur=[B[g]||0,M[g]||0,V[g]||0],old=[PB[g]||0,PM[g]||0,PV[g]||0],delta=prev&&old[2]?Math.round((cur[2]-old[2])/old[2]*100):null,warn=delta!=null&&Math.abs(delta)>=30;return `<div style="padding:9px 0;border-top:1px solid var(--line)"><div class="row between"><b>${esc(g)}</b><span class="num">${cur.join(" · ")}</span></div>${prev?`<div class="sm mute">${esc(prev.naziv)}: ${old.join(" · ")}${delta!=null?` · <span style="color:${warn?'var(--amber)':'var(--mute)'}">${delta>0?'+':''}${delta}% vrh</span>`:""}</div>`:""}</div>`}).join("")||`<div class="empty">Dodaj vežbe u program da bi se računao volumen.</div>`}</div><details style="margin-top:8px"><summary class="sm" style="cursor:pointer;color:var(--steel)">Detalj po podgrupama</summary><div style="margin-top:8px">${PODGRUPE.map(p=>{const b=planByKey(sabs,"b")[p]||0,m=planByKey(sabs,"t3")[p]||0,v=planByKey(sabs,"t5")[p]||0;return b||m||v?`<div class="row between sm" style="padding:5px 0"><span>${esc(p)}</span><span class="num">${b} · ${m} · ${v}</span></div>`:""}).join("")}</div></details></div>`}
 
 let TAB="danas",CTX={};function go(t,ctx){TAB=t;CTX=ctx||{};render()}$("#nav").addEventListener("click",e=>{const b=e.target.closest("button[data-t]");if(b)go(b.dataset.t)});
-function render(){const c=activeCycle(),n=cikNedelja(),f=faza(n,c);$("#phase").textContent=c&&c.pocetak?c.naziv+" · "+f.ime:"Ciklus nije podešen";[...$("#nav").children].forEach(b=>b.setAttribute("aria-current",b.dataset.t===TAB?"page":"false"));const t={danas:"Ivan Lero",pregled:"Pregled",program:"Treninzi",vezbe:"Vežbe",vise:"Više"}[TAB];$("#ttl").textContent=CTX.title||t;({danas:vDanas,pregled:vPregled,program:vProgram,vezbe:vVezbe,vise:vVise}[TAB])(f);window.scrollTo(0,CTX.keepScroll?window.scrollY:0)}
+function render(){const c=activeCycle(),n=cikNedelja(),f=faza(n,c),ph=$("#phase");ph.textContent=c&&c.pocetak?c.naziv+" · "+f.ime:"Ciklus nije podešen";ph.style.display=TAB==="program"?"none":"";[...$("#nav").children].forEach(b=>b.setAttribute("aria-current",b.dataset.t===TAB?"page":"false"));const t={danas:"Ivan Lero",pregled:"Pregled",program:"Treninzi",vezbe:"Vežbe",vise:"Više"}[TAB];$("#ttl").textContent=CTX.title||t;({danas:vDanas,pregled:vPregled,program:vProgram,vezbe:vVezbe,vise:vVise}[TAB])(f);window.scrollTo(0,CTX.keepScroll?window.scrollY:0)}
 
 
 /* ISTORIJA TRENINGA */
@@ -1280,45 +1280,36 @@ function selectedLibraryVolumeCard(ids){
 
 function vProgram(f){
   if(CTX.sab)return editLibraryWorkout(CTX.sab,f);
+
   const sabs=LIB(),programs=PROG();
 
   $("#view").innerHTML=`
     <div class="row between" style="margin:2px 0 10px">
-      <div>
-        <div class="xs">Programi</div>
-        <div class="sm mute" style="margin-top:2px">Nedeljna struktura treninga</div>
-      </div>
-      <button class="btn sm pri" id="newProgramTop">+ Novi program</button>
+      <div class="xs">Programi</div>
+      <button class="btn sm pri" id="newProgramTop">+ Novi</button>
     </div>
 
-    <div class="list" id="programRows">
+    <div class="list">
       ${programs.map(p=>{
-        const names=(p.treningIds||[]).map(id=>LIB().find(x=>x.id===id)?.naziv||"Obrisan trening").map(cleanWorkoutName);
-        return `<div class="card tight">
+        const names=(p.treningIds||[])
+          .map(id=>LIB().find(x=>x.id===id)?.naziv||"Obrisan trening")
+          .map(cleanWorkoutName);
+        return `<div class="card tight" data-openprog="${p.id}" style="cursor:pointer">
           <div class="row between">
             <div class="grow trunc">
-              <div class="row" style="gap:7px">
-                <b class="trunc">${esc(p.naziv)}</b>
-                <span class="chip">${(p.treningIds||[]).length}×</span>
-              </div>
-              <div class="sm mute trunc" style="margin-top:5px">${names.map(esc).join(" · ")}</div>
+              <b>${esc(p.naziv)}</b>
+              <div class="sm mute trunc" style="margin-top:4px">${names.map(esc).join(" · ")}</div>
             </div>
-          </div>
-          <div class="row" style="gap:8px;margin-top:11px">
-            <button class="btn pri grow" data-runprog="${p.id}">Pokreni</button>
-            <button class="btn gh" data-editprog="${p.id}">Uredi</button>
-            <button class="btn gh danger" data-delprog="${p.id}" aria-label="Obriši program">Obriši</button>
+            <span class="mute" style="font-size:22px">›</span>
           </div>
         </div>`;
       }).join("")||`<div class="empty">Još nema programa. Napravi prvi program.</div>`}
     </div>
 
-    <button class="card tight" id="openWorkoutLibrary" style="width:100%;text-align:left;margin-top:14px;color:inherit">
+    <div class="xs" style="margin:18px 0 8px">Biblioteka treninga</div>
+    <button class="card tight" id="openWorkoutLibrary" style="width:100%;text-align:left;color:inherit;cursor:pointer">
       <div class="row between">
-        <div>
-          <div class="xs">Biblioteka treninga</div>
-          <b>${sabs.length} treninga</b>
-        </div>
+        <div><b>${sabs.length} treninga</b></div>
         <span class="mute" style="font-size:22px">›</span>
       </div>
     </button>
@@ -1340,22 +1331,10 @@ function vProgram(f){
 
   $("#newProgramTop").onclick=()=>newProgramDialog();
 
-  $("#view").querySelectorAll("[data-runprog]").forEach(b=>b.onclick=()=>{
-    const p=PROG().find(x=>x.id===b.dataset.runprog);
-    if(p)newCycleDialog(p);
-  });
-
-  $("#view").querySelectorAll("[data-editprog]").forEach(b=>b.onclick=()=>{
-    const p=PROG().find(x=>x.id===b.dataset.editprog);
+  // Program card itself opens editing. Mesocycle actions live only under "Više".
+  $("#view").querySelectorAll("[data-openprog]").forEach(c=>c.onclick=()=>{
+    const p=PROG().find(x=>x.id===c.dataset.openprog);
     if(p)newProgramDialog(p);
-  });
-
-  $("#view").querySelectorAll("[data-delprog]").forEach(b=>b.onclick=()=>{
-    const p=PROG().find(x=>x.id===b.dataset.delprog);if(!p)return;
-    if(confirm("Obrisati program „"+p.naziv+"”? Postojeći mezociklusi ostaju nepromijenjeni.")){
-      S.programBiblioteka=PROG().filter(x=>x.id!==p.id);
-      save();render();toast("Program obrisan");
-    }
   });
 
   $("#openWorkoutLibrary").onclick=()=>{
@@ -1368,7 +1347,8 @@ function vProgram(f){
   const n=$("#novi");
   if(n)n.onclick=()=>{
     const x={id:uid(),naziv:"Novi trening",tip:"Full body",stavke:[]};
-    S.treningBiblioteka.push(x);save();
+    S.treningBiblioteka.push(x);
+    save();
     go("program",{sab:x.id,title:"Uredi trening"});
   };
 }
