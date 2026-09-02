@@ -263,7 +263,7 @@ button{font:inherit}
 <dialog id="dlg"><div class="sheet" id="dlgBody"></div></dialog><div class="toast" id="toast"></div>
 <script>
 "use strict";
-const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,BUILD_ID="2026.09.01.7.7",BUILD_LABEL="Iteracija 7.7",BUILD_DATE="01.09.2026.";
+const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,BUILD_ID="2026.09.02.7.8",BUILD_LABEL="Iteracija 7.8",BUILD_DATE="02.09.2026.";
 const CATALOG_VERSION=2;
 const CORE_CHOICE_ID="__core_choice__",CORE_CHOICE_LABEL="Core — po izboru";
 const PODGRUPE=["Kvadriceps","Hamstring","Gluteus","Listovi","Grudi","Leđa","Rame — front","Rame — side","Rame — rear","Biceps","Triceps","Podlaktice","Trbuh/Core","Kardio"];
@@ -620,6 +620,7 @@ function migrateLegacySets(){
 
 
 function runMigrations(){
+  if(!S.treningRekapitulacije||typeof S.treningRekapitulacije!=="object"||Array.isArray(S.treningRekapitulacije))S.treningRekapitulacije={};
   migrateCatalogV2();
   migrateExerciseCatalog();
   migrateCycles();
@@ -645,7 +646,7 @@ function seed(){
   ];
   const L=[];const lg=(d,n,s,p,kg,nap)=>L.push({id:uid(),datum:d,vezbaId:byName[n],serije:s,pon:p,kg:kg,napomena:nap||""});
   lg("2026-08-25","Incline Dumbbell Bench Press",2,12,32);lg("2026-08-25","Incline Dumbbell Bench Press",1,9,32);lg("2026-08-25","Assisted Pull-Up",2,8,46,"asistencija 28");lg("2026-08-25","Assisted Pull-Up",1,6,46,"asistencija 28");lg("2026-08-25","Chest-Supported Row",3,10,36);lg("2026-08-25","Dumbbell Lateral Raise",3,13,14,"Zamena za bočno na sajli; dodata serija.");lg("2026-08-25","Face Pull",3,17,15);lg("2026-08-25","Dumbbell Biceps Curl",3,10,20);lg("2026-08-25","Skull Crusher",3,8,16);lg("2026-08-27","Leg Press",1,8,70);lg("2026-08-27","Leg Press",1,9,70);lg("2026-08-27","Leg Press",1,10,70);lg("2026-08-27","Seated Leg Curl",3,8,45);lg("2026-08-27","Pec Deck",1,12,15);lg("2026-08-27","Pec Deck",1,8,15);lg("2026-08-27","Pec Deck",1,12,10);lg("2026-08-27","Lat Pulldown — Wide Grip",1,8,45);lg("2026-08-27","Lat Pulldown — Wide Grip",1,12,40);lg("2026-08-27","Lat Pulldown — Wide Grip",1,10,40);lg("2026-08-27","Reverse Pec Deck",3,15,10);lg("2026-08-27","Dumbbell Overhead Press",2,10,24);lg("2026-08-27","Hammer Curl",2,8,24);lg("2026-08-27","Hammer Curl",1,7,24);lg("2026-08-28","Goblet Squat",3,8,26);lg("2026-08-28","Romanian Deadlift",3,10,32);lg("2026-08-28","Bulgarian Split Squat",3,8,5,"Prvi put — lagano.");lg("2026-08-28","Leg Extension",1,10,40,"Manje nego obično — dolazi posle bugarskog.");lg("2026-08-28","Leg Extension",1,9,40);lg("2026-08-28","Leg Extension",1,10,37.5);lg("2026-08-28","Hip Thrust",3,10,15);lg("2026-08-28","Crunch",3,10,null);lg("2026-08-28","Russian Twist",3,10,8);
-  return {v:1,catalogVersion:CATALOG_VERSION,vezbe:V,sabloni:SAB,dnevnik:L,ciklus:{naziv:"M1",pocetak:"2026-08-24",nedelja:9}};
+  return {v:1,catalogVersion:CATALOG_VERSION,vezbe:V,sabloni:SAB,dnevnik:L,treningRekapitulacije:{},ciklus:{naziv:"M1",pocetak:"2026-08-24",nedelja:9}};
 }
 
 const vez=id=>S.vezbe.find(v=>v.id===id);const vname=id=>{if(id===CORE_CHOICE_ID)return CORE_CHOICE_LABEL;const v=vez(id);return v?v.naziv:"—"};const vpod=id=>{if(id===CORE_CHOICE_ID)return "Trbuh/Core";const v=vez(id);return v?v.podgrupa:""};
@@ -698,18 +699,27 @@ function grupisiTrening(logs){
   logs.forEach(l=>{if(!m.has(l.vezbaId))m.set(l.vezbaId,[]);m.get(l.vezbaId).push(l)});
   return [...m.entries()];
 }
+function workoutSummaryHtml(r,mode="history"){
+  if(!r)return "";
+  const pct=r.planAll?Math.round(r.actual/r.planAll*100):100;
+  const msg=r.msg||"";
+  return `${mode==="history"?`<div class="xs" style="margin:4px 0 8px">Rekapitulacija treninga</div>`:`<div class="xs">Trening završen</div>`}${msg?`<div class="card" style="margin-top:8px;border-color:var(--g-lite)"><div style="font-size:19px;font-weight:800;line-height:1.35">${esc(msg)}</div></div>`:""}<h2 style="font-size:21px;margin:12px 0 2px">${esc(r.naziv||"Trening")}</h2><div class="sm mute">${dmy(r.datum)} · ${Number(r.dur)||0} min</div><div class="card" style="margin-top:14px"><div class="row between"><div><div class="xs">Radni setovi</div><div class="num" style="font-size:30px">${Number(r.actual)||0}<span class="mute" style="font-size:18px"> / ${Number(r.planAll)||0}</span></div></div><div style="text-align:right"><div class="xs">Plan</div><div class="num" style="font-size:24px">${pct}%</div></div></div><div class="bar" style="margin-top:10px"><i class="${r.actual>r.planAll?"over":(r.actual>=r.planAll?"full":"")}" style="width:${Math.min(100,pct)}%"></i></div>${r.volume?`<div class="sm mute" style="margin-top:9px">Evidentirani volumen: <b class="num" style="color:var(--chalk)">${Math.round(r.volume).toLocaleString("sr-RS")} kg</b></div>`:""}</div><div class="xs" style="margin:14px 0 8px">Po mišićnim grupama</div><div class="list">${Object.entries(r.groupDone||{}).map(([g,n])=>`<div class="card tight"><div class="row between"><span>${esc(g)}</span><b class="num">${n} setova</b></div></div>`).join("")}</div>${r.progress&&r.progress.length?`<div class="xs" style="margin:16px 0 8px">Napredak prema prethodnom treningu</div><div class="card tight">${r.progress.map(x=>`<div class="sm" style="padding:5px 0">↑ ${esc(x)}</div>`).join("")}</div>`:""}${r.prs&&r.prs.length?`<div class="xs" style="margin:16px 0 8px">Lični rekordi</div><div class="card tight">${r.prs.map(x=>`<div class="sm" style="padding:5px 0">★ ${esc(x)}</div>`).join("")}</div>`:""}${r.advice&&r.advice.length?`<div class="xs" style="margin:16px 0 8px">Za sljedeći trening</div><div class="card tight">${r.advice.slice(0,3).map(x=>`<div class="sm" style="padding:6px 0">${esc(x)}</div>`).join("")}</div>`:""}`;
+}
+function savedWorkoutSummary(logs){
+  const sid=(logs||[]).find(x=>x.sessionId)?.sessionId;
+  return sid&&S.treningRekapitulacije?S.treningRekapitulacije[sid]||null:null;
+}
+
 function detaljTreninga(key){
   const logs=logsZaTrening(key);
   if(!logs.length){toast("Trening nije pronađen");go("danas");return}
   const d=logs[0].datum,gr=grupisiTrening(logs),ser=logs.reduce((a,l)=>a+Number(l.serije||0),0);
   const vol=logs.reduce((a,l)=>a+(Number(l.kg)||0)*(Number(l.pon)||0)*(Number(l.serije)||0),0);
+  const recap=savedWorkoutSummary(logs);
   $("#ttl").textContent="Trening "+dmy(d);
   $("#view").innerHTML=`
     <button class="btn sm gh" id="hNazad" style="margin-bottom:10px">‹ Nazad</button>
-    <div class="card"><div class="row between">
-      <div><div class="xs">Rekapitulacija</div><div class="num" style="font-size:28px">${ser}<span class="sm mute"> setova</span></div></div>
-      <div style="text-align:right"><div class="xs">Volumen</div><div class="num">${Math.round(vol).toLocaleString("sr")}<span class="sm mute"> kg</span></div></div>
-    </div></div>
+    ${recap?workoutSummaryHtml(recap,"history"):`<div class="card"><div class="row between"><div><div class="xs">Rekapitulacija</div><div class="num" style="font-size:28px">${ser}<span class="sm mute"> setova</span></div></div><div style="text-align:right"><div class="xs">Volumen</div><div class="num">${Math.round(vol).toLocaleString("sr")}<span class="sm mute"> kg</span></div></div></div></div>`}
     <div class="list">${gr.map(([vid,rows])=>`<div class="card">
       <div><b>${esc(vname(vid))}</b><div class="sm mute">${esc(vpod(vid))}</div></div>
       ${rows.map((l,i)=>`<div class="setline">
@@ -732,7 +742,10 @@ function detaljTreninga(key){
     logsZaTrening(key).length?detaljTreninga(key):go("danas");
   });
   $("#hDel").onclick=()=>{if(confirm("Obrisati cijeli trening "+dmy(d)+"?")){
-    const ids=new Set(logs.map(x=>x.id));S.dnevnik=S.dnevnik.filter(x=>!ids.has(x.id));save();go("danas");toast("Trening obrisan");
+    const ids=new Set(logs.map(x=>x.id)),sid=logs.find(x=>x.sessionId)?.sessionId;
+    S.dnevnik=S.dnevnik.filter(x=>!ids.has(x.id));
+    if(sid&&S.treningRekapitulacije)delete S.treningRekapitulacije[sid];
+    save();go("danas");toast("Trening obrisan");
   }};
 }
 
@@ -978,7 +991,6 @@ function finishWorkout(sab){
   if(!S.sedmicniStatus)S.sedmicniStatus={};
   if(!S.sedmicniStatus[wk])S.sedmicniStatus[wk]={};
   if(session.sabId)S.sedmicniStatus[wk][workoutIdentity(session.sabId)]=session.custom?"custom":"done";
-  save();
   const dur=Math.max(1,Math.round((Date.now()-(session.startTs||Date.now()))/60000)),planAll=session.stavke.reduce((a,s)=>a+Number(s.plan||0),0),actual=records.length,volume=records.reduce((a,l)=>a+(l.kg!=null&&l.pon?Number(l.kg)*Number(l.pon):0),0);
   const progress=[];
   exerciseDone.forEach(x=>{
@@ -997,8 +1009,13 @@ function finishWorkout(sab){
     if(a)advice.push(a);
   });
 
+  const recap={sessionId,naziv:sab?sab.naziv:"Trening",datum:session.datum,dur,actual,planAll,volume,groupDone,progress,prs,advice};
+  recap.msg=workoutMessage(recap.planAll?Math.round(recap.actual/recap.planAll*100):100);
+  if(!S.treningRekapitulacije||typeof S.treningRekapitulacije!=="object")S.treningRekapitulacije={};
+  S.treningRekapitulacije[sessionId]=clone(recap);
+  save();
   sesija=null;sessionClear();
-  showWorkoutSummary({naziv:sab?sab.naziv:"Trening",datum:session.datum,dur,actual,planAll,volume,groupDone,progress,prs,advice});
+  showWorkoutSummary(recap);
 }
 
 function workoutMessage(pct){
@@ -1036,12 +1053,11 @@ function workoutMessage(pct){
 }
 
 function showWorkoutSummary(r){
-  const pct=r.planAll?Math.round(r.actual/r.planAll*100):100;
-  const msg=workoutMessage(pct);
-  openDlg(`<div class="xs">Trening završen</div><div class="card" style="margin-top:8px;border-color:var(--g-lite)"><div style="font-size:19px;font-weight:800;line-height:1.35">${esc(msg)}</div></div><h2 style="font-size:21px;margin:12px 0 2px">${esc(r.naziv)}</h2><div class="sm mute">${dmy(r.datum)} · ${r.dur} min</div><div class="card" style="margin-top:14px"><div class="row between"><div><div class="xs">Radni setovi</div><div class="num" style="font-size:30px">${r.actual}<span class="mute" style="font-size:18px"> / ${r.planAll}</span></div></div><div style="text-align:right"><div class="xs">Plan</div><div class="num" style="font-size:24px">${pct}%</div></div></div><div class="bar" style="margin-top:10px"><i class="${r.actual>r.planAll?"over":(r.actual>=r.planAll?"full":"")}" style="width:${Math.min(100,pct)}%"></i></div>${r.volume?`<div class="sm mute" style="margin-top:9px">Evidentirani volumen: <b class="num" style="color:var(--chalk)">${Math.round(r.volume).toLocaleString("sr-RS")} kg</b></div>`:""}</div><div class="xs" style="margin:14px 0 8px">Po mišićnim grupama</div><div class="list">${Object.entries(r.groupDone).map(([g,n])=>`<div class="card tight"><div class="row between"><span>${esc(g)}</span><b class="num">${n} setova</b></div></div>`).join("")}</div>${r.progress.length?`<div class="xs" style="margin:16px 0 8px">Napredak prema prethodnom treningu</div><div class="card tight">${r.progress.map(x=>`<div class="sm" style="padding:5px 0">↑ ${esc(x)}</div>`).join("")}</div>`:""}${r.prs&&r.prs.length?`<div class="xs" style="margin:16px 0 8px">Lični rekordi</div><div class="card tight">${r.prs.map(x=>`<div class="sm" style="padding:5px 0">★ ${esc(x)}</div>`).join("")}</div>`:""}${r.advice&&r.advice.length?`<div class="xs" style="margin:16px 0 8px">Za sljedeći trening</div><div class="card tight">${r.advice.slice(0,3).map(x=>`<div class="sm" style="padding:6px 0">${esc(x)}</div>`).join("")}</div>`:""}<div class="btnrow" style="margin-top:14px"><button class="btn pri grow" id="sumDone">Gotovo</button><button class="btn grow" id="sumReview">Nedeljni pregled</button></div>`);
+  openDlg(`${workoutSummaryHtml(r,"finish")}<div class="btnrow" style="margin-top:14px"><button class="btn pri grow" id="sumDone">Gotovo</button><button class="btn grow" id="sumReview">Nedeljni pregled</button></div>`);
   $("#sumDone").onclick=()=>{closeDlg();go("danas")};
   $("#sumReview").onclick=()=>{closeDlg();go("pregled")};
 }
+
 function zadnjiTreninzi(){
   const groups=workoutHistoryGroups().slice(0,6);
   if(!groups.length)return `<div class="empty">Još nema treninga. Otvori prvi iznad.</div>`;
