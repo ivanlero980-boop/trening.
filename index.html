@@ -263,7 +263,7 @@ button{font:inherit}
 <dialog id="dlg"><div class="sheet" id="dlgBody"></div></dialog><div class="toast" id="toast"></div>
 <script>
 "use strict";
-const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,BUILD_ID="2026.09.02.7.8",BUILD_LABEL="Iteracija 7.8",BUILD_DATE="02.09.2026.";
+const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,BUILD_ID="2026.09.03.7.9",BUILD_LABEL="Iteracija 7.9",BUILD_DATE="03.09.2026.";
 const CATALOG_VERSION=2;
 const CORE_CHOICE_ID="__core_choice__",CORE_CHOICE_LABEL="Core — po izboru";
 const PODGRUPE=["Kvadriceps","Hamstring","Gluteus","Listovi","Grudi","Leđa","Rame — front","Rame — side","Rame — rear","Biceps","Triceps","Podlaktice","Trbuh/Core","Kardio"];
@@ -719,7 +719,7 @@ function detaljTreninga(key){
   $("#ttl").textContent="Trening "+dmy(d);
   $("#view").innerHTML=`
     <button class="btn sm gh" id="hNazad" style="margin-bottom:10px">‹ Nazad</button>
-    ${recap?workoutSummaryHtml(recap,"history"):`<div class="card"><div class="row between"><div><div class="xs">Rekapitulacija</div><div class="num" style="font-size:28px">${ser}<span class="sm mute"> setova</span></div></div><div style="text-align:right"><div class="xs">Volumen</div><div class="num">${Math.round(vol).toLocaleString("sr")}<span class="sm mute"> kg</span></div></div></div></div>`}
+    ${recap?workoutSummaryHtml(recap,"history")+`<button class="btn gh" style="width:100%;margin:10px 0 12px" id="hShare">Podijeli rekapitulaciju</button>`:`<div class="card"><div class="row between"><div><div class="xs">Rekapitulacija</div><div class="num" style="font-size:28px">${ser}<span class="sm mute"> setova</span></div></div><div style="text-align:right"><div class="xs">Volumen</div><div class="num">${Math.round(vol).toLocaleString("sr")}<span class="sm mute"> kg</span></div></div></div></div>`}
     <div class="list">${gr.map(([vid,rows])=>`<div class="card">
       <div><b>${esc(vname(vid))}</b><div class="sm mute">${esc(vpod(vid))}</div></div>
       ${rows.map((l,i)=>`<div class="setline">
@@ -732,6 +732,7 @@ function detaljTreninga(key){
       </div>`).join("")}</div>`).join("")}</div>
     <button class="btn gh danger" style="width:100%;margin-top:12px" id="hDel">Obriši cijeli trening</button>`;
   $("#hNazad").onclick=()=>go("danas");
+  const hs=$("#hShare");if(hs&&recap)hs.onclick=()=>shareWorkoutSummary(recap);
   $("#view").querySelectorAll("input[data-h]").forEach(inp=>inp.onchange=()=>{
     const[id,k]=inp.dataset.h.split(":");const l=S.dnevnik.find(x=>x.id===id);if(!l)return;
     const parsed=parseNum(inp.value);if(k==="kg"&&inp.value.trim()!==""&&parsed===null){inp.style.borderColor="var(--hot)";toast("Neispravan broj");return}l[k]=k==="kg"?parsed:(inp.value===""?null:Number(inp.value));inp.style.borderColor="";save();
@@ -1052,8 +1053,70 @@ function workoutMessage(pct){
   ]);
 }
 
+
+function workoutSummaryShareText(r){
+  const pct=r.planAll?Math.round(r.actual/r.planAll*100):100;
+  const lines=[
+    `${r.naziv||"Trening"} · ${dmy(r.datum)}`,
+    `${Number(r.dur)||0} min · ${Number(r.actual)||0}/${Number(r.planAll)||0} radnih setova · ${pct}% plana`
+  ];
+  if(r.volume)lines.push(`Volumen: ${Math.round(r.volume).toLocaleString("sr-RS")} kg`);
+  const groups=Object.entries(r.groupDone||{});
+  if(groups.length){
+    lines.push("");
+    lines.push("Po mišićnim grupama:");
+    groups.forEach(([g,n])=>lines.push(`• ${g}: ${n} setova`));
+  }
+  if(r.prs&&r.prs.length){
+    lines.push("");
+    lines.push("Lični rekordi:");
+    r.prs.forEach(x=>lines.push(`★ ${x}`));
+  }
+  if(r.progress&&r.progress.length){
+    lines.push("");
+    lines.push("Napredak:");
+    r.progress.forEach(x=>lines.push(`↑ ${x}`));
+  }
+  if(r.advice&&r.advice.length){
+    lines.push("");
+    lines.push("Za sljedeći trening:");
+    r.advice.slice(0,3).forEach(x=>lines.push(`• ${x}`));
+  }
+  return lines.join("\n");
+}
+async function shareWorkoutSummary(r){
+  const text=workoutSummaryShareText(r);
+  try{
+    if(navigator.share){
+      await navigator.share({title:r.naziv||"Rekapitulacija treninga",text});
+      return;
+    }
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      await navigator.clipboard.writeText(text);
+      toast("Rekapitulacija je kopirana");
+      return;
+    }
+    throw new Error("share unavailable");
+  }catch(e){
+    if(e&&e.name==="AbortError")return;
+    try{
+      if(navigator.clipboard&&navigator.clipboard.writeText){
+        await navigator.clipboard.writeText(text);
+        toast("Rekapitulacija je kopirana");
+      }else{
+        const ta=document.createElement("textarea");
+        ta.value=text;ta.style.position="fixed";ta.style.opacity="0";
+        document.body.appendChild(ta);ta.focus();ta.select();
+        document.execCommand("copy");ta.remove();
+        toast("Rekapitulacija je kopirana");
+      }
+    }catch(_){toast("Dijeljenje trenutno nije dostupno")}
+  }
+}
+
 function showWorkoutSummary(r){
-  openDlg(`${workoutSummaryHtml(r,"finish")}<div class="btnrow" style="margin-top:14px"><button class="btn pri grow" id="sumDone">Gotovo</button><button class="btn grow" id="sumReview">Nedeljni pregled</button></div>`);
+  openDlg(`${workoutSummaryHtml(r,"finish")}<div class="btnrow" style="margin-top:14px"><button class="btn grow" id="sumShare">Podijeli</button><button class="btn pri grow" id="sumDone">Gotovo</button></div><button class="btn gh" style="width:100%;margin-top:8px" id="sumReview">Nedeljni pregled</button>`);
+  $("#sumShare").onclick=()=>shareWorkoutSummary(r);
   $("#sumDone").onclick=()=>{closeDlg();go("danas")};
   $("#sumReview").onclick=()=>{closeDlg();go("pregled")};
 }
