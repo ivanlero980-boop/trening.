@@ -263,7 +263,7 @@ button{font:inherit}
 <dialog id="dlg"><div class="sheet" id="dlgBody"></div></dialog><div class="toast" id="toast"></div>
 <script>
 "use strict";
-const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,LOWER_CORE_FIX_VERSION=1,BUILD_ID="2026.09.04.7.12",BUILD_LABEL="Iteracija 7.12",BUILD_DATE="04.09.2026.";
+const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,LOWER_CORE_FIX_VERSION=1,BUILD_ID="2026.09.04.7.13",BUILD_LABEL="Iteracija 7.13",BUILD_DATE="04.09.2026.";
 const CATALOG_VERSION=2;
 const CORE_CHOICE_ID="__core_choice__",CORE_CHOICE_LABEL="Core — po izboru";
 const PODGRUPE=["Kvadriceps","Hamstring","Gluteus","Listovi","Grudi","Leđa","Rame — front","Rame — side","Rame — rear","Biceps","Triceps","Podlaktice","Trbuh/Core","Kardio"];
@@ -623,17 +623,24 @@ function migrateLegacySets(){
 function repairAccidentalThirdLowerCore(){
   if(!S||Number(S.lowerCoreFixVersion||0)>=LOWER_CORE_FIX_VERSION)return;
 
-  const fixWorkout=t=>{
+  const badLowerSignature=t=>{
     if(!t||String(t.tip||"").toLowerCase()!=="lower"||!Array.isArray(t.stavke))return false;
-    const coreIdx=[];
-    t.stavke.forEach((x,i)=>{if(x&&x.vezbaId===CORE_CHOICE_ID)coreIdx.push(i)});
-    if(coreIdx.length<3)return false;
-    // Historical seed accidentally contained three identical Core placeholders.
-    // Keep the first two and remove only additional unresolved placeholders.
-    const keep=new Set(coreIdx.slice(0,2));
-    const before=t.stavke.length;
-    t.stavke=t.stavke.filter((x,i)=>x.vezbaId!==CORE_CHOICE_ID||keep.has(i));
-    return t.stavke.length!==before;
+    if(t.stavke.length!==8)return false;
+    const names=t.stavke.map(x=>x&&x.vezbaId===CORE_CHOICE_ID?CORE_CHOICE_LABEL:vname(x&&x.vezbaId));
+    return names[0]==="Goblet Squat" &&
+      names[1]==="Romanian Deadlift" &&
+      names[2]==="Bulgarian Split Squat" &&
+      names[3]==="Leg Extension" &&
+      names[4]==="Hip Thrust" &&
+      names[5]===CORE_CHOICE_LABEL &&
+      names[6]===CORE_CHOICE_LABEL &&
+      names[7]===CORE_CHOICE_LABEL;
+  };
+
+  const fixWorkout=t=>{
+    if(!badLowerSignature(t))return false;
+    t.stavke=t.stavke.slice(0,7);
+    return true;
   };
 
   (S.treningBiblioteka||[]).forEach(fixWorkout);
@@ -645,16 +652,18 @@ function repairAccidentalThirdLowerCore(){
     if(raw){
       const p=JSON.parse(raw),session=p&&p.session;
       if(session&&Array.isArray(session.stavke)){
-        const lowerLike=String(session.tip||"").toLowerCase()==="lower" ||
-          ((S.mezociklusi||[]).some(c=>(c.sabloni||[]).some(t=>t.id===session.sabId&&String(t.tip||"").toLowerCase()==="lower")));
-        if(lowerLike){
-          const coreIdx=[];
-          session.stavke.forEach((x,i)=>{if(x&&x.vezbaId===CORE_CHOICE_ID)coreIdx.push(i)});
-          if(coreIdx.length>=3){
-            const keep=new Set(coreIdx.slice(0,2));
-            session.stavke=session.stavke.filter((x,i)=>x.vezbaId!==CORE_CHOICE_ID||keep.has(i));
-            localStorage.setItem(SESSION_KEY,JSON.stringify(p));
+        let source=null;
+        if(session.sabId){
+          for(const c of (S.mezociklusi||[])){
+            source=(c.sabloni||[]).find(t=>t.id===session.sabId);
+            if(source)break;
           }
+          if(!source)source=(S.sabloni||[]).find(t=>t.id===session.sabId)||null;
+        }
+        const sessionMatches=badLowerSignature({...session,tip:(source&&source.tip)||session.tip});
+        if(sessionMatches){
+          session.stavke=session.stavke.slice(0,7);
+          localStorage.setItem(SESSION_KEY,JSON.stringify(p));
         }
       }
     }
@@ -662,6 +671,7 @@ function repairAccidentalThirdLowerCore(){
 
   S.lowerCoreFixVersion=LOWER_CORE_FIX_VERSION;
 }
+
 
 function runMigrations(){
   if(!S.treningRekapitulacije||typeof S.treningRekapitulacije!=="object"||Array.isArray(S.treningRekapitulacije))S.treningRekapitulacije={};
