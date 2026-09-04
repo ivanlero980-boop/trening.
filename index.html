@@ -263,7 +263,7 @@ button{font:inherit}
 <dialog id="dlg"><div class="sheet" id="dlgBody"></div></dialog><div class="toast" id="toast"></div>
 <script>
 "use strict";
-const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,BUILD_ID="2026.09.03.7.11",BUILD_LABEL="Iteracija 7.11",BUILD_DATE="03.09.2026.";
+const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,LOWER_CORE_FIX_VERSION=1,BUILD_ID="2026.09.04.7.12",BUILD_LABEL="Iteracija 7.12",BUILD_DATE="04.09.2026.";
 const CATALOG_VERSION=2;
 const CORE_CHOICE_ID="__core_choice__",CORE_CHOICE_LABEL="Core — po izboru";
 const PODGRUPE=["Kvadriceps","Hamstring","Gluteus","Listovi","Grudi","Leđa","Rame — front","Rame — side","Rame — rear","Biceps","Triceps","Podlaktice","Trbuh/Core","Kardio"];
@@ -619,8 +619,53 @@ function migrateLegacySets(){
 }
 
 
+
+function repairAccidentalThirdLowerCore(){
+  if(!S||Number(S.lowerCoreFixVersion||0)>=LOWER_CORE_FIX_VERSION)return;
+
+  const fixWorkout=t=>{
+    if(!t||String(t.tip||"").toLowerCase()!=="lower"||!Array.isArray(t.stavke))return false;
+    const coreIdx=[];
+    t.stavke.forEach((x,i)=>{if(x&&x.vezbaId===CORE_CHOICE_ID)coreIdx.push(i)});
+    if(coreIdx.length<3)return false;
+    // Historical seed accidentally contained three identical Core placeholders.
+    // Keep the first two and remove only additional unresolved placeholders.
+    const keep=new Set(coreIdx.slice(0,2));
+    const before=t.stavke.length;
+    t.stavke=t.stavke.filter((x,i)=>x.vezbaId!==CORE_CHOICE_ID||keep.has(i));
+    return t.stavke.length!==before;
+  };
+
+  (S.treningBiblioteka||[]).forEach(fixWorkout);
+  (S.sabloni||[]).forEach(fixWorkout);
+  (S.mezociklusi||[]).forEach(c=>(c.sabloni||[]).forEach(fixWorkout));
+
+  try{
+    const raw=localStorage.getItem(SESSION_KEY);
+    if(raw){
+      const p=JSON.parse(raw),session=p&&p.session;
+      if(session&&Array.isArray(session.stavke)){
+        const lowerLike=String(session.tip||"").toLowerCase()==="lower" ||
+          ((S.mezociklusi||[]).some(c=>(c.sabloni||[]).some(t=>t.id===session.sabId&&String(t.tip||"").toLowerCase()==="lower")));
+        if(lowerLike){
+          const coreIdx=[];
+          session.stavke.forEach((x,i)=>{if(x&&x.vezbaId===CORE_CHOICE_ID)coreIdx.push(i)});
+          if(coreIdx.length>=3){
+            const keep=new Set(coreIdx.slice(0,2));
+            session.stavke=session.stavke.filter((x,i)=>x.vezbaId!==CORE_CHOICE_ID||keep.has(i));
+            localStorage.setItem(SESSION_KEY,JSON.stringify(p));
+          }
+        }
+      }
+    }
+  }catch(e){}
+
+  S.lowerCoreFixVersion=LOWER_CORE_FIX_VERSION;
+}
+
 function runMigrations(){
   if(!S.treningRekapitulacije||typeof S.treningRekapitulacije!=="object"||Array.isArray(S.treningRekapitulacije))S.treningRekapitulacije={};
+  repairAccidentalThirdLowerCore();
   migrateCatalogV2();
   migrateExerciseCatalog();
   migrateCycles();
@@ -641,7 +686,7 @@ function seed(){
     {id:uid(),naziv:"Dan 1 — Full body A",tip:"Full body",stavke:[st("Hack Squat",3,4,4,"8–10","2–3 min","Glavna vežba za noge."),st("Machine Chest Press",3,4,4,"8–10","2 min"),st("Smith Bench Press",2,2,2,"8–10","2 min","Različit ugao od prethodne vežbe."),st("Seated Cable Row",3,4,4,"10–12","2 min"),st("Romanian Deadlift",3,3,3,"10–12","2 min"),st("Dumbbell Lateral Raise",2,3,3,"12–15","60–90 s"),st("Cable Triceps Pushdown — Bar",3,3,3,"10–12","60–90 s")]},
     {id:uid(),naziv:"Dan 2 — Upper",tip:"Upper",stavke:[st("Incline Dumbbell Bench Press",3,3,4,"8–10","2 min","Klupa 30–45°."),st("Kinesis Fly",2,2,2,"12–15","90 s"),st("Assisted Pull-Up",3,3,4,"6–10","2 min","Progres = smanjenje protivtega."),st("Chest-Supported Row",3,3,3,"10–12","2 min"),st("Cable Lateral Raise",3,3,3,"12–15","60–90 s"),st("Face Pull",3,3,3,"15–20","60 s"),st("Dumbbell Biceps Curl",3,3,3,"10–12","60–90 s"),st("Skull Crusher",3,3,3,"10–12","60–90 s"),st("Core — po izboru",2,2,2,"12–15","60 s")]},
     {id:uid(),naziv:"Dan 3 — Full body B",tip:"Full body",stavke:[st("Leg Press",3,3,3,"10–12","2–3 min"),st("Seated Leg Curl",3,3,3,"10–12","90 s"),st("Pec Deck",3,3,3,"12–15","90 s","Izolacija, ne potisak."),st("Lat Pulldown — Wide Grip",3,3,3,"10–12","2 min"),st("Reverse Pec Deck",3,3,3,"15","60 s"),st("Dumbbell Overhead Press",2,2,2,"8–10","2 min","Jedine direktne serije za prednje rame."),st("Hammer Curl",3,3,3,"10–12","60–90 s")]},
-    {id:uid(),naziv:"Dan 4 — Lower",tip:"Lower",stavke:[st("Goblet Squat",3,3,3,"10–12","2 min"),st("Romanian Deadlift",3,3,4,"8–10","2 min","Teže nego u Danu 1."),st("Bulgarian Split Squat",3,3,3,"10–12/nozi","90 s","Zamena: iskorak."),st("Leg Extension",3,3,3,"12–15","60–90 s"),st("Hip Thrust",3,3,3,"10–12","90 s"),st("Core — po izboru",3,3,3,"15","60 s"),st("Core — po izboru",2,2,2,"12–15","60 s"),st("Core — po izboru",2,2,2,"12–15","60 s")]},
+    {id:uid(),naziv:"Dan 4 — Lower",tip:"Lower",stavke:[st("Goblet Squat",3,3,3,"10–12","2 min"),st("Romanian Deadlift",3,3,4,"8–10","2 min","Teže nego u Danu 1."),st("Bulgarian Split Squat",3,3,3,"10–12/nozi","90 s","Zamena: iskorak."),st("Leg Extension",3,3,3,"12–15","60–90 s"),st("Hip Thrust",3,3,3,"10–12","90 s"),st("Core — po izboru",3,3,3,"15","60 s"),st("Core — po izboru",2,2,2,"12–15","60 s")]},
     {id:uid(),naziv:"Full body C — rezervni",tip:"Rezervni",stavke:[st("Bulgarian Split Squat",3,3,3,"10–12/nozi","90 s"),st("Romanian Deadlift",3,3,3,"10","2 min"),st("Assisted Pull-Up",3,3,3,"6–10","2 min"),st("Incline Dumbbell Bench Press",3,3,3,"8–10","2 min"),st("Seated Cable Row",3,3,3,"10–12","2 min"),st("Face Pull",3,3,3,"15","60 s"),st("Barbell Biceps Curl",3,3,3,"10","60–90 s"),st("Triceps Dip",3,3,3,"8–12","90 s"),st("Core — po izboru",3,3,3,"15","60 s")]}
   ];
   const L=[];const lg=(d,n,s,p,kg,nap)=>L.push({id:uid(),datum:d,vezbaId:byName[n],serije:s,pon:p,kg:kg,napomena:nap||""});
@@ -977,12 +1022,12 @@ function progressionAdvice(item,sessionDate,f){
 }
 
 function finishWorkout(sab){
-  const session=sesija;if(session.stavke.some(x=>x.vezbaId===CORE_CHOICE_ID)){toast("Izaberi konkretnu Core vježbu prije završetka treninga");return}
+  const session=sesija;
   const records=[],groupDone={},exerciseDone=[];
   const sessionCycle=cycleForDate(session.datum)||activeCycle();
   const sessionId=session.sessionId||("sess_"+(session.startTs||Date.now())+"_"+uid());
   session.stavke.forEach(s=>{
-    const sets=completedSets(s);if(!sets.length)return;
+    const sets=completedSets(s);if(!sets.length||s.vezbaId===CORE_CHOICE_ID)return;
     sets.forEach(u=>records.push({id:uid(),sessionId,datum:session.datum,mezociklusId:(sessionCycle||{}).id,vezbaId:s.vezbaId,serije:1,pon:Number(u.pon)||null,kg:parseNum(u.kg),napomena:u.nap||"",rir:u.rir||"",sabId:session.sabId||"",originalSabId:session.sabId||"",custom:!!session.custom}));
     const g=GRUPA[vpod(s.vezbaId)]||vpod(s.vezbaId)||"Ostalo";groupDone[g]=(groupDone[g]||0)+sets.length;
     exerciseDone.push({vezbaId:s.vezbaId,sets,plan:s.plan,ponTarget:s.pon});
