@@ -263,7 +263,7 @@ button{font:inherit}
 <dialog id="dlg"><div class="sheet" id="dlgBody"></div></dialog><div class="toast" id="toast"></div>
 <script>
 "use strict";
-const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,LOWER_CORE_FIX_VERSION=1,BUILD_ID="2026.11.27.10.6",BUILD_LABEL="Iteracija 10.6",BUILD_DATE="27.11.2026.";
+const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,LOWER_CORE_FIX_VERSION=1,BUILD_ID="2026.11.27.10.7",BUILD_LABEL="Iteracija 10.7",BUILD_DATE="27.11.2026.";
 const CATALOG_VERSION=2;
 const CORE_CHOICE_ID="__core_choice__",CORE_CHOICE_LABEL="Core — po izboru";
 const PODGRUPE=["Kvadriceps","Hamstring","Gluteus","Listovi","Grudi","Leđa","Rame — front","Rame — side","Rame — rear","Biceps","Triceps","Podlaktice","Trbuh/Core","Kardio"];
@@ -603,7 +603,7 @@ function migrateCycles(){
     S.aktivniMezociklusId=cid;
     (S.dnevnik||[]).forEach(l=>{if(!l.mezociklusId)l.mezociklusId=cid});
   }
-  S.mezociklusi.forEach(c=>{if(!Array.isArray(c.sabloni))c.sabloni=clone(S.sabloni||[]);if(!c.trajanje)c.trajanje=9;if(!c.status)c.status=c.id===S.aktivniMezociklusId?"aktivan":"završen"});
+  S.mezociklusi.forEach(c=>{if(!Array.isArray(c.sabloni))c.sabloni=clone(S.sabloni||[]);if(!c.trajanje&&!c.otvoren)c.trajanje=9;if(!c.status)c.status=c.id===S.aktivniMezociklusId?"aktivan":"završen"});
   if(!S.aktivniMezociklusId||!S.mezociklusi.some(c=>c.id===S.aktivniMezociklusId)){const c=S.mezociklusi.find(x=>x.status==="aktivan")||S.mezociklusi[S.mezociklusi.length-1];S.aktivniMezociklusId=c.id;c.status="aktivan"}
   const ordered=[...S.mezociklusi].sort((a,b)=>(a.pocetak||"").localeCompare(b.pocetak||""));
   (S.dnevnik||[]).forEach(l=>{if(l.mezociklusId&&S.mezociklusi.some(c=>c.id===l.mezociklusId))return;let c=ordered[0];ordered.forEach(x=>{if((x.pocetak||"")<=l.datum)c=x});if(c)l.mezociklusId=c.id});
