@@ -263,7 +263,7 @@ button{font:inherit}
 <dialog id="dlg"><div class="sheet" id="dlgBody"></div></dialog><div class="toast" id="toast"></div>
 <script>
 "use strict";
-const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,LOWER_CORE_FIX_VERSION=1,BUILD_ID="2026.11.27.10.0",BUILD_LABEL="Iteracija 10.0",BUILD_DATE="27.11.2026.";
+const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,LOWER_CORE_FIX_VERSION=1,BUILD_ID="2026.11.27.10.1",BUILD_LABEL="Iteracija 10.1",BUILD_DATE="27.11.2026.";
 const CATALOG_VERSION=2;
 const CORE_CHOICE_ID="__core_choice__",CORE_CHOICE_LABEL="Core — po izboru";
 const PODGRUPE=["Kvadriceps","Hamstring","Gluteus","Listovi","Grudi","Leđa","Rame — front","Rame — side","Rame — rear","Biceps","Triceps","Podlaktice","Trbuh/Core","Kardio"];
@@ -1170,21 +1170,30 @@ function importLibrary(pkg){
   if(!Array.isArray(S.treningBiblioteka))S.treningBiblioteka=[];if(!Array.isArray(S.programBiblioteka))S.programBiblioteka=[];
   const byName=new Map(S.vezbe.map(v=>[normName(v.naziv),v]));let newEx=0;
   (pkg.vezbe||[]).forEach(e=>{if(!e||!e.naziv||byName.has(normName(e.naziv)))return;const v={id:uid(),naziv:String(e.naziv),podgrupa:PODGRUPE.includes(e.podgrupa)?e.podgrupa:PODGRUPE[0],oprema:e.oprema||"",napomena:e.napomena||""};S.vezbe.push(v);byName.set(normName(v.naziv),v);newEx++});
-  const names=new Set(LIB().map(w=>normName(cleanWorkoutName(w.naziv)))),keyMap={};let nw=0;
+  // Identical workout/program already in the library = reuse it (re-importing the same file adds nothing).
+  const sig=st=>JSON.stringify((st||[]).map(x=>[x.vezbaId,Number(x.b)||0,String(x.pon||""),!!x.ss,!!x.prog]));
+  const keyMap={};let nw=0,skip=0;
   pkg.treninzi.forEach(w=>{
-    let n=String(w.naziv||"Trening");if(names.has(normName(n)))n+=" (uvezeno)";names.add(normName(n));
     const stavke=(w.stavke||[]).map(x=>{const vid=x.core?CORE_CHOICE_ID:(byName.get(normName(x.vezba))||{}).id;return vid?{id:uid(),vezbaId:vid,b:Number(x.b)||0,pon:x.pon||"",odmor:x.odmor||"",napomena:x.napomena||"",ss:!!x.ss,prog:!!x.prog}:null}).filter(Boolean);
+    let n=String(w.naziv||"Trening");
+    const same=LIB().find(e=>normName(cleanWorkoutName(e.naziv)).replace(/ \(uvezeno( \d+)?\)$/,"")===normName(n)&&sig(e.stavke)===sig(stavke));
+    if(same){keyMap[w.key]=same.id;skip++;return}
+    const names=new Set(LIB().map(e=>normName(cleanWorkoutName(e.naziv))));
+    if(names.has(normName(n))){let k=n+" (uvezeno)",i=2;while(names.has(normName(k)))k=n+" (uvezeno "+(i++)+")";n=k}
     const id=uid();S.treningBiblioteka.push({id,naziv:n,tip:w.tip||"Ostalo",stavke});keyMap[w.key]=id;nw++;
   });
-  const pnames=new Set(PROG().map(p=>normName(p.naziv)));let np=0;
-  (pkg.programi||[]).forEach(p=>{const ids=(p.treninzi||[]).map(k=>keyMap[k]).filter(Boolean);if(!ids.length)return;let n=String(p.naziv||"Program");if(pnames.has(normName(n)))n+=" (uvezeno)";pnames.add(normName(n));S.programBiblioteka.push({id:uid(),naziv:n,treningIds:ids});np++});
+  let np=0;
+  (pkg.programi||[]).forEach(p=>{const ids=(p.treninzi||[]).map(k=>keyMap[k]).filter(Boolean);if(!ids.length)return;
+    if(PROG().some(e=>JSON.stringify(e.treningIds)===JSON.stringify(ids))){skip++;return}
+    const pn=new Set(PROG().map(e=>normName(e.naziv)));let n=String(p.naziv||"Program");if(pn.has(normName(n))){let k=n+" (uvezeno)",i=2;while(pn.has(normName(k)))k=n+" (uvezeno "+(i++)+")";n=k}
+    S.programBiblioteka.push({id:uid(),naziv:n,treningIds:ids,frekvencija:ids.length});np++});
   if(!save())return null;
-  return {nw,np,newEx};
+  return {nw,np,newEx,skip};
 }
 function bindLibraryShare(){
   const e=$("#libExp"),i=$("#libImp"),f=$("#libF");if(!e||!i||!f)return;
   e.onclick=shareLibrary;i.onclick=()=>f.click();
-  f.onchange=async()=>{const file=f.files&&f.files[0];if(!file)return;try{const r=importLibrary(JSON.parse(await file.text()));if(r){toast(`Uvezeno: ${r.nw} treninga, ${r.np} programa`);render()}}catch(err){toast(err&&err.message?err.message:"Fajl nije ispravan")}f.value=""};
+  f.onchange=async()=>{const file=f.files&&f.files[0];if(!file)return;try{const r=importLibrary(JSON.parse(await file.text()));if(r){toast(r.nw||r.np?`Uvezeno: ${r.nw} treninga, ${r.np} programa${r.skip?` · ${r.skip} već postoji`:""}`:"Sve iz fajla već postoji — ništa nije dodato");render()}}catch(err){toast(err&&err.message?err.message:"Fajl nije ispravan")}f.value=""};
 }
 function exerciseMenu(i){
   const st=sesija.stavke[i],n=sesija.stavke.length;
@@ -1341,7 +1350,9 @@ function finishWorkout(sab){
     if(a)advice.push(a);
   });
 
+  const sablon=session.custom?session.stavke.filter(st=>st.vezbaId!==CORE_CHOICE_ID&&completedSets(st).length).map(st=>{const reps=completedSets(st).map(u=>Number(u.pon)||0).filter(Boolean),lo=Math.min(...reps),hi=Math.max(...reps);return{vezbaId:st.vezbaId,b:completedSets(st).length,pon:reps.length?(lo===hi?String(lo):lo+"–"+hi):"",odmor:st.odmor||"",ss:!!st.ss}}):null;
   const recap={sessionId,naziv:session.custom?("Slobodni trening"+(sab?" (umjesto "+cleanWorkoutName(sab.naziv)+")":"")):(sab?sab.naziv:"Trening"),datum:session.datum,dur,actual,planAll,volume,groupDone,progress,prs,advice};
+  if(sablon&&sablon.length)recap.sablon=sablon;
   recap.msg=workoutMessage(recap.planAll?Math.round(recap.actual/recap.planAll*100):100);
   if(!S.treningRekapitulacije||typeof S.treningRekapitulacije!=="object")S.treningRekapitulacije={};
   S.treningRekapitulacije[sessionId]=clone(recap);
@@ -1448,7 +1459,8 @@ async function shareWorkoutSummary(r){
 }
 
 function showWorkoutSummary(r){
-  openDlg(`${workoutSummaryHtml(r,"finish")}<div class="btnrow" style="margin-top:14px"><button class="btn grow" id="sumShare">Podijeli</button><button class="btn pri grow" id="sumDone">Gotovo</button></div><button class="btn gh" style="width:100%;margin-top:8px" id="sumReview">Nedeljni pregled</button>`);
+  openDlg(`${workoutSummaryHtml(r,"finish")}<div class="btnrow" style="margin-top:14px"><button class="btn grow" id="sumShare">Podijeli</button><button class="btn pri grow" id="sumDone">Gotovo</button></div>${r.sablon?`<button class="btn gh" style="width:100%;margin-top:8px" id="sumTpl">Sačuvaj kao trening u biblioteci</button>`:""}<button class="btn gh" style="width:100%;margin-top:8px" id="sumReview">Nedeljni pregled</button>`);
+  const tb=$("#sumTpl");if(tb)tb.onclick=()=>{const n=(prompt("Naziv novog treninga:","Slobodni "+dmy(r.datum))||"").trim();if(!n)return;if(!Array.isArray(S.treningBiblioteka))S.treningBiblioteka=[];S.treningBiblioteka.push({id:uid(),naziv:n,tip:"Ostalo",stavke:r.sablon.map(x=>({id:uid(),...x,napomena:""}))});save();tb.disabled=true;tb.textContent="Sačuvano u Treninzi ✓";toast("Trening sačuvan")};
   $("#sumShare").onclick=()=>shareWorkoutSummary(r);
   $("#sumDone").onclick=()=>{closeDlg();go("danas")};
   $("#sumReview").onclick=()=>{closeDlg();go("pregled")};
@@ -2194,14 +2206,25 @@ function programLibraryDialog(){
   const ps=PROG();
   const freqs=[2,3,4,5,6].filter(n=>ps.some(p=>(p.frekvencija||p.treningIds.length)===n));
   openDlg(`<div class="row between" style="margin-bottom:5px"><h2 style="font-size:18px">Biblioteka programa</h2><button class="btn sm pri" id="pNew">+ Novi</button></div>
-  <div class="sm mute" style="margin-bottom:12px">Program je sačuvana nedelja. Pokretanjem programa praviš novi mezociklus, dok program ostaje u biblioteci.</div>
-  ${freqs.map(n=>`<div class="xs" style="margin:14px 0 7px">${n}× nedeljno</div>${ps.filter(p=>(p.frekvencija||p.treningIds.length)===n).map(p=>`<div class="card tight"><b>${esc(p.naziv)}</b><div class="sm mute" style="margin-top:3px">${p.treningIds.map(id=>LIB().find(x=>x.id===id)?.naziv||"Obrisan trening").map(cleanWorkoutName).map(esc).join(" · ")}</div><div class="btnrow" style="margin-top:9px"><button class="btn sm pri" data-runprog="${p.id}">Pokreni</button><button class="btn sm gh" data-editprog="${p.id}">Uredi</button><button class="btn sm gh danger" data-delprog="${p.id}">Obriši</button></div></div>`).join("")}`).join("")||`<div class="empty">Još nema sačuvanih programa.</div>`}
+  <div class="sm mute" style="margin-bottom:12px">Program je sačuvana nedelja. „Pokreni“ = rad po programu bez ciklusa${S.bezCiklusa?"":"; „Mezociklus“ = program sa nedjeljama, progresijom i deloadom"}. „Kopiraj“ pravi novu varijantu sa kopijama treninga koje možeš mijenjati nezavisno.</div>
+  ${freqs.map(n=>`<div class="xs" style="margin:14px 0 7px">${n}× nedeljno</div>${ps.filter(p=>(p.frekvencija||p.treningIds.length)===n).map(p=>`<div class="card tight"><b>${esc(p.naziv)}</b><div class="sm mute" style="margin-top:3px">${p.treningIds.map(id=>LIB().find(x=>x.id===id)?.naziv||"Obrisan trening").map(cleanWorkoutName).map(esc).join(" · ")}</div><div class="btnrow" style="margin-top:9px"><button class="btn sm pri" data-runopen="${p.id}">Pokreni</button>${S.bezCiklusa?"":`<button class="btn sm gh" data-runprog="${p.id}">Mezociklus</button>`}<button class="btn sm gh" data-editprog="${p.id}">Uredi</button><button class="btn sm gh" data-dupprog="${p.id}">Kopiraj</button><button class="btn sm gh danger" data-delprog="${p.id}">Obriši</button></div></div>`).join("")}`).join("")||`<div class="empty">Još nema sačuvanih programa.</div>`}
   <button class="btn gh" style="width:100%;margin-top:10px" id="pClose">Zatvori</button>`);
   $("#pClose").onclick=closeDlg;
   $("#pNew").onclick=()=>{closeDlg();newProgramDialog()};
   $("#dlgBody").querySelectorAll("[data-editprog]").forEach(b=>b.onclick=()=>{const p=PROG().find(x=>x.id===b.dataset.editprog);closeDlg();newProgramDialog(p)});
   $("#dlgBody").querySelectorAll("[data-delprog]").forEach(b=>b.onclick=()=>{const p=PROG().find(x=>x.id===b.dataset.delprog);if(confirm("Obrisati program „"+p.naziv+"”? Postojeći mezociklusi ostaju nepromenjeni.")){S.programBiblioteka=PROG().filter(x=>x.id!==p.id);save();programLibraryDialog()}});
   $("#dlgBody").querySelectorAll("[data-runprog]").forEach(b=>b.onclick=()=>{const p=PROG().find(x=>x.id===b.dataset.runprog);closeDlg();newCycleDialog(p)});
+  $("#dlgBody").querySelectorAll("[data-runopen]").forEach(b=>b.onclick=()=>{const p=PROG().find(x=>x.id===b.dataset.runopen),cur=activeCycle();if(cur&&!cur.otvoren&&!cycleEnded(cur)&&!confirm("Aktivni mezociklus "+cur.naziv+" će biti završen. Nastaviti?"))return;if(startOpenPeriod(p)){closeDlg();render();toast("Pokrenut: "+p.naziv)}});
+  $("#dlgBody").querySelectorAll("[data-dupprog]").forEach(b=>b.onclick=()=>{const p=PROG().find(x=>x.id===b.dataset.dupprog);const np=duplicateProgram(p);closeDlg();setTimeout(()=>newProgramDialog(np),0);toast("Kopija napravljena")});
+}
+// New variant of a program: copies the program and its workouts, so they can be changed independently.
+function duplicateProgram(p){
+  const map={},names=new Set(LIB().map(w=>normName(cleanWorkoutName(w.naziv))));
+  const uniq=n=>{let k=n+" — kopija",i=2;while(names.has(normName(k)))k=n+" — kopija "+(i++);names.add(normName(k));return k};
+  (p.treningIds||[]).forEach(id=>{if(map[id])return;const w=LIB().find(x=>x.id===id);if(!w)return;const y=clone(w);y.id=uid();y.naziv=uniq(cleanWorkoutName(w.naziv));y.stavke=(y.stavke||[]).map(x=>({...x,id:uid()}));S.treningBiblioteka.push(y);map[id]=y.id});
+  const pn=new Set(PROG().map(x=>normName(x.naziv)));let n=p.naziv+" — kopija",i=2;while(pn.has(normName(n)))n=p.naziv+" — kopija "+(i++);
+  const np={id:uid(),naziv:n,treningIds:(p.treningIds||[]).map(id=>map[id]).filter(Boolean),frekvencija:p.frekvencija||(p.treningIds||[]).length,createdAt:iso(new Date())};
+  S.programBiblioteka.push(np);save();return np;
 }
 function newCycleDialog(preselect=null){
   const programs=(S.programBiblioteka||[]).filter(p=>Array.isArray(p.treningIds)&&p.treningIds.length);
@@ -2211,7 +2234,23 @@ function newCycleDialog(preselect=null){
   const info=()=>{const p=programs.find(x=>x.id===$("#mProgram").value);$("#mInfo").innerHTML=p?`<div class="card tight"><div class="xs">Izabrani program</div><b>${esc(p.naziv)}</b><div class="sm mute">${p.treningIds.map(id=>LIB().find(x=>x.id===id)).filter(Boolean).map(x=>esc(cleanWorkoutName(x.naziv))).join(" · ")}</div></div>`:""};$("#mProgram").onchange=info;info();$("#mCancel").onclick=closeDlg;const getWeeks=bindWeekTable($("#mWeeks"),weekPreset(Number($("#mDur").value)||6),60,$("#mDur"));
   $("#mSave").onclick=()=>{const p=programs.find(x=>x.id===$("#mProgram").value),ids=(p?.treningIds||[]).filter(id=>LIB().some(x=>x.id===id));if(!p||ids.length!==p.treningIds.length){toast("Program nije potpun");return}const name=$("#mName").value.trim();if(!name){toast("Upiši naziv");return}const cur=activeCycle(),wk=monday(iso(new Date()));if(cur&&Array.isArray(S.sedmicniPlan&&S.sedmicniPlan[wk]))S.sedmicniPlan[wk]=storedPlanIdsFromSnapshotIds(weeklyPlanIds(wk,cur),cur);if(cur)cur.status="završen";const wk2=getWeeks(),progression=progressionFromWeeks(wk2.nedelje),c={id:uid(),naziv:name,pocetak:monday($("#mStart").value||iso(new Date())),trajanje:Number($("#mDur").value)||9,nedelje:wk2.nedelje,deloadPct:wk2.deloadPct,status:"aktivan",frekvencija:ids.length,sourceProgramId:p.id,programNaziv:p.naziv,progresija:progression,sabloni:librarySnapshot(ids,progression)};if(cur&&cur.pocetak===c.pocetak&&!logsForCycle(cur.id).length)S.mezociklusi=S.mezociklusi.filter(x=>x.id!==cur.id);S.mezociklusi.push(c);S.aktivniMezociklusId=c.id;S.ciklusPitanje=null;if(!save())return;closeDlg();render();toast("Kreiran "+name)};
 }
-function cycleDetail(c){const logs=logsForCycle(c.id),days=new Set(logs.map(l=>l.datum)).size,sets=logs.reduce((a,l)=>a+Number(l.serije||0),0),actual=groupFromSub(logs.reduce((m,l)=>{const p=vpod(l.vezbaId);if(p)m[p]=(m[p]||0)+Number(l.serije||0);return m},{})),B=groupFromSub(planByKey(c.sabloni,"b")),M=groupFromSub(planByKey(c.sabloni,"t3")),V=groupFromSub(planByKey(c.sabloni,"t5"));$("#view").innerHTML=`<button class="btn sm gh" id="mcBack" style="margin-bottom:10px">‹ Mezociklusi</button><div class="card"><div class="row between"><div><h2 style="font-size:20px">${esc(c.naziv)}</h2><div class="sm mute">od ${dmy(c.pocetak)} · ${c.trajanje} nedelja</div></div><span class="chip ${c.status==="aktivan"?"on":""}">${esc(c.status)}</span></div><div class="g2" style="margin-top:14px"><div><div class="num" style="font-size:25px">${days}</div><div class="sm mute">treninga</div></div><div><div class="num" style="font-size:25px">${sets}</div><div class="sm mute">serija</div></div></div></div><div class="card"><div class="row between"><div><div class="xs">Osnovna nedelja</div><b>${c.sabloni.length}× nedeljno</b></div><span class="chip">${c.trajanje} ned.</span></div><div style="margin-top:8px">${c.sabloni.map(s=>`<div class="sm" style="padding:6px 0;border-top:1px solid var(--line)">${esc(cleanWorkoutName(s.naziv))}</div>`).join("")||`<div class="empty">Nema treninga.</div>`}</div></div><div class="card"><div class="xs" style="margin-bottom:8px">Plan sedmično · baza / sredina / vrh</div>${GRUPE_ORDER.filter(g=>B[g]||M[g]||V[g]).map(g=>`<details style="padding:7px 0;border-top:1px solid var(--line)"><summary class="row between" style="cursor:pointer"><span>${esc(g)}</span><span class="num">${B[g]||0} · ${M[g]||0} · ${V[g]||0}</span></summary><div class="sm mute" style="padding-top:6px">${c.sabloni.map(s=>{const b=workoutVolumeMaps(s,"b").group[g]||0,m=workoutVolumeMaps(s,"t3").group[g]||0,v=workoutVolumeMaps(s,"t5").group[g]||0;return b||m||v?`<div class="row between" style="padding:3px 0"><span>${esc(cleanWorkoutName(s.naziv))}</span><span class="num">${b} · ${m} · ${v}</span></div>`:""}).join("")}</div></details>`).join("")||`<div class="empty">Nema programa.</div>`}</div><div class="card"><div class="xs" style="margin-bottom:8px">Stvarno odrađeno u ciklusu</div>${GRUPE_ORDER.filter(g=>actual[g]).map(g=>`<div class="row between" style="padding:7px 0;border-top:1px solid var(--line)"><span>${esc(g)}</span><span class="num">${actual[g]}</span></div>`).join("")||`<div class="empty">Još nema treninga.</div>`}</div>`;$("#mcBack").onclick=()=>go("vise") }
+// Start vs end of a cycle: best set of the first and last session per exercise (deload weeks excluded), and weekly sets per group.
+function cycleProgressHtml(c){
+  const dl=new Set();if(Array.isArray(c.nedelje))c.nedelje.forEach((w,i)=>{if(w.deload)dl.add(i+1)});
+  const wkOf=d=>cikNedelja(d,c),logs=logsForCycle(c.id),ok=logs.filter(l=>recordEligible(l)&&!dl.has(wkOf(l.datum)));
+  const by={};ok.forEach(l=>{(by[l.vezbaId]||(by[l.vezbaId]={}));const d=by[l.vezbaId];const sc=setScore(l);if(!d[l.datum]||sc>d[l.datum].score)d[l.datum]={kg:l.kg,pon:Number(l.pon)||0,score:sc,e1:e1rm(l.kg,l.pon)}});
+  const rows=Object.entries(by).map(([vid,d])=>{const ds=Object.keys(d).sort();if(ds.length<2)return null;const a=d[ds[0]],z=d[ds[ds.length-1]],m=a.e1&&z.e1?"e1":"pon",va=m==="e1"?a.e1:a.pon,vz=m==="e1"?z.e1:z.pon,pct=va?Math.round((vz-va)/va*100):0;return{vid,a,z,pct,m}}).filter(Boolean).sort((x,y)=>y.pct-x.pct);
+  const f=x=>(x.kg!=null&&x.kg!==""?esc(x.kg)+"×":"")+x.pon;
+  const wk={};logs.forEach(l=>{const n=wkOf(l.datum),g=GRUPA[vpod(l.vezbaId)]||vpod(l.vezbaId);if(!g)return;(wk[g]||(wk[g]={}));wk[g][n]=(wk[g][n]||0)+Number(l.serije||0)});
+  const weeks=[...new Set(logs.map(l=>wkOf(l.datum)))].sort((a,b)=>a-b),train=weeks.filter(n=>!dl.has(n));
+  const vol=GRUPE_ORDER.filter(g=>wk[g]).map(g=>{const first=train.length?(wk[g][train[0]]||0):0,last=train.length?(wk[g][train[train.length-1]]||0):0,peak=Math.max(0,...train.map(n=>wk[g][n]||0));return{g,first,last,peak}});
+  const avgPct=rows.length?Math.round(rows.reduce((a,r)=>a+r.pct,0)/rows.length):null;
+  return `<div class="card"><div class="row between"><div class="xs">Napredak u ciklusu · početak → kraj</div>${avgPct!=null?`<span class="sm" style="color:${avgPct>0?"var(--ok)":(avgPct<0?"var(--amber)":"var(--mute)")}">prosjek ${avgPct>0?"+":""}${avgPct}%</span>`:""}</div>
+  ${rows.length?rows.map(r=>`<div class="row between sm" style="padding:6px 0;border-top:1px solid var(--line)"><span class="trunc" style="max-width:48%">${esc(vname(r.vid))}</span><span><span class="mute">${f(r.a)} →</span> <b class="num">${f(r.z)}</b> <span style="color:${r.pct>0?"var(--ok)":(r.pct<0?"var(--amber)":"var(--mute)")}">${r.pct>0?"+":""}${r.pct}%</span></span></div>`).join(""):`<div class="sm mute" style="margin-top:6px">Potrebna su bar dva treninga iste vježbe u ciklusu.</div>`}
+  <div class="sm mute" style="margin-top:6px">Najbolji set prvog i posljednjeg treninga vježbe (e1RM; bez tega po ponavljanjima). Deload nedjelje se ne računaju.</div></div>
+  ${vol.length&&train.length>1?`<div class="card"><div class="row between"><div class="xs">Sedmični setovi po grupama</div><span class="sm mute">N${train[0]} · vrh · N${train[train.length-1]}</span></div>${vol.map(v=>`<div class="row between sm" style="padding:6px 0;border-top:1px solid var(--line)"><span>${esc(v.g)}</span><span class="num">${v.first} · ${v.peak} · ${v.last}${v.first?` <span class="mute">(${v.last>=v.first?"+":""}${Math.round((v.last-v.first)/v.first*100)}%)</span>`:""}</span></div>`).join("")}</div>`:""}`;
+}
+function cycleDetail(c){const logs=logsForCycle(c.id),days=new Set(logs.map(l=>l.datum)).size,sets=logs.reduce((a,l)=>a+Number(l.serije||0),0),actual=groupFromSub(logs.reduce((m,l)=>{const p=vpod(l.vezbaId);if(p)m[p]=(m[p]||0)+Number(l.serije||0);return m},{})),B=groupFromSub(planByKey(c.sabloni,"b")),M=groupFromSub(planByKey(c.sabloni,"t3")),V=groupFromSub(planByKey(c.sabloni,"t5"));$("#view").innerHTML=`<button class="btn sm gh" id="mcBack" style="margin-bottom:10px">‹ Mezociklusi</button><div class="card"><div class="row between"><div><h2 style="font-size:20px">${esc(c.naziv)}</h2><div class="sm mute">od ${dmy(c.pocetak)}${c.otvoren?" · bez ciklusa":" · "+c.trajanje+" nedelja"}</div></div><span class="chip ${c.status==="aktivan"?"on":""}">${esc(c.status)}</span></div><div class="g2" style="margin-top:14px"><div><div class="num" style="font-size:25px">${days}</div><div class="sm mute">treninga</div></div><div><div class="num" style="font-size:25px">${sets}</div><div class="sm mute">serija</div></div></div></div>${cycleProgressHtml(c)}<div class="card"><div class="row between"><div><div class="xs">Osnovna nedelja</div><b>${c.sabloni.length}× nedeljno</b></div><span class="chip">${c.otvoren?"bez ciklusa":c.trajanje+" ned."}</span></div><div style="margin-top:8px">${c.sabloni.map(s=>`<div class="sm" style="padding:6px 0;border-top:1px solid var(--line)">${esc(cleanWorkoutName(s.naziv))}</div>`).join("")||`<div class="empty">Nema treninga.</div>`}</div></div><div class="card"><div class="xs" style="margin-bottom:8px">Plan sedmično · baza / sredina / vrh</div>${GRUPE_ORDER.filter(g=>B[g]||M[g]||V[g]).map(g=>`<details style="padding:7px 0;border-top:1px solid var(--line)"><summary class="row between" style="cursor:pointer"><span>${esc(g)}</span><span class="num">${B[g]||0} · ${M[g]||0} · ${V[g]||0}</span></summary><div class="sm mute" style="padding-top:6px">${c.sabloni.map(s=>{const b=workoutVolumeMaps(s,"b").group[g]||0,m=workoutVolumeMaps(s,"t3").group[g]||0,v=workoutVolumeMaps(s,"t5").group[g]||0;return b||m||v?`<div class="row between" style="padding:3px 0"><span>${esc(cleanWorkoutName(s.naziv))}</span><span class="num">${b} · ${m} · ${v}</span></div>`:""}).join("")}</div></details>`).join("")||`<div class="empty">Nema programa.</div>`}</div><div class="card"><div class="xs" style="margin-bottom:8px">Stvarno odrađeno u ciklusu</div>${GRUPE_ORDER.filter(g=>actual[g]).map(g=>`<div class="row between" style="padding:7px 0;border-top:1px solid var(--line)"><span>${esc(g)}</span><span class="num">${actual[g]}</span></div>`).join("")||`<div class="empty">Još nema treninga.</div>`}</div>`;$("#mcBack").onclick=()=>go("vise") }
 
 function backupTrainingCount(){
   return new Set(S.dnevnik.map(l=>l.datum)).size;
