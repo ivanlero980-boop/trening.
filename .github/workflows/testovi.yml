@@ -18,8 +18,7 @@ jobs:
       fail-fast: false
       matrix:
         browser: [chromium, webkit]
-    # WebKit is informational until its first green run; Chromium blocks publishing.
-    continue-on-error: ${{ matrix.browser == 'webkit' }}
+    # Both engines must pass before publishing (WebKit = the engine of Safari on iPhone).
     steps:
       - uses: actions/checkout@v4
         with:

@@ -50,7 +50,7 @@ Isti testovi mogu i na WebKit-u, engine-u koji koristi Safari na iPhone-u: `BROW
 
 ## Automatsko pokretanje (GitHub Actions)
 
-`.github/workflows/testovi.yml` pokreće sve testove posle svake izmjene na `main` i za svaki pull request, u Chromium-u i WebKit-u. Aplikacija se objavljuje na GitHub Pages **samo ako testovi u Chromium-u prođu**. WebKit je za sada informativan, a kad prvi put prođe, može postati obavezan (ukloniti `continue-on-error`).
+`.github/workflows/testovi.yml` pokreće sve testove posle svake izmjene na `main` i za svaki pull request, u Chromium-u i WebKit-u. Aplikacija se objavljuje na GitHub Pages **samo ako testovi prođu u oba pregledača**.
 
 Da bi objava zavisila od testova, u repozitoriju treba jednom podesiti: **Settings → Pages → Build and deployment → Source: GitHub Actions**. Dok je tamo „Deploy from a branch“, GitHub objavljuje svaku izmjenu odmah, bez obzira na testove.
 
