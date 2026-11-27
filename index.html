@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#101317">
 <script>
 /* Light themes need dark status-bar text; iOS reads this at app launch. */
-try{var tm=localStorage.getItem("trening_tema");if(tm==="lightStone"||tm==="warmSand"){document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]').setAttribute("content","default");document.documentElement.setAttribute("data-light","1")}}catch(e){}
+try{var tm=localStorage.getItem("trening_tema");if(tm)document.documentElement.setAttribute("data-theme",tm);if(tm==="lightStone"||tm==="warmSand"){document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]').setAttribute("content","default");document.documentElement.setAttribute("data-light","1")}}catch(e){}
 </script>
 <title>My Training</title>
 <link rel="manifest" href="manifest.json">
@@ -266,6 +266,56 @@ input,select,textarea{
 
 
 button{font:inherit}
+/* Finished sets: subtle tint (all themes) */
+.setline.done{background:color-mix(in srgb,var(--g-deep) 9%,transparent);border-radius:10px;border-top-color:transparent}
+
+/* ===== Light Stone design layer: designed for a light surface, not just recoloured ===== */
+[data-theme="lightStone"] body{font-feature-settings:"tnum" 1}
+[data-theme="lightStone"] h1,[data-theme="lightStone"] h2,[data-theme="lightStone"] h3{font-weight:620;letter-spacing:-.015em}
+[data-theme="lightStone"] header h1{font-size:22px;font-weight:640}
+[data-theme="lightStone"] b{font-weight:600}
+[data-theme="lightStone"] .phase{color:var(--mute);font-weight:600;letter-spacing:.07em}
+[data-theme="lightStone"] .xs{color:var(--mute);font-weight:600}
+[data-theme="lightStone"] .card{border-color:transparent;border-radius:16px}
+[data-theme="lightStone"] .card.tight{border-radius:14px}
+[data-theme="lightStone"] .sheet{border-color:transparent;border-radius:20px}
+[data-theme="lightStone"] input,[data-theme="lightStone"] select,[data-theme="lightStone"] textarea,[data-theme="lightStone"] .dateShell{background:var(--panel2);border-color:transparent}
+[data-theme="lightStone"] input:focus,[data-theme="lightStone"] select:focus{outline:1.5px solid var(--g-deep);outline-offset:0;border-color:transparent}
+/* Numbers carry the screen: bigger weights and reps */
+[data-theme="lightStone"] .setline input{font-size:19px!important;font-weight:600;text-align:center;letter-spacing:-.01em;padding:9px 6px!important}
+[data-theme="lightStone"] .setline input::placeholder{color:#B4B8B3;font-weight:500}
+[data-theme="lightStone"] .num{font-weight:650;letter-spacing:-.02em}
+/* Flat buttons, neutral by default; green only for the primary action */
+[data-theme="lightStone"] button.btn{background:var(--panel2);border-color:transparent;font-weight:600;box-shadow:none}
+[data-theme="lightStone"] button.btn.gh{background:transparent;border:1px solid var(--line)}
+[data-theme="lightStone"] button.btn.pri{background:var(--g-deep);border-color:var(--g-deep);color:#fff;box-shadow:none}
+[data-theme="lightStone"] button.btn.danger{color:var(--hot)}
+/* Chips: selection is neutral (dark), not green */
+[data-theme="lightStone"] .chip{background:var(--panel2);border-color:transparent;color:var(--steel);font-weight:600}
+[data-theme="lightStone"] .chip.on{background:var(--chalk);border-color:var(--chalk);color:#fff}
+/* Confirmed set: the one place besides the primary button where green appears inside a card */
+[data-theme="lightStone"] .setline.done{background:#EAF1EC}
+[data-theme="lightStone"] [data-ok].pri{background:var(--g-deep);color:#fff}
+[data-theme="lightStone"] [data-ok].gh{border-color:var(--line);color:var(--mute)}
+/* Segmented control (Pregled tabs): white pill on stone, no colour */
+[data-theme="lightStone"] .pregledSegments{background:var(--panel2);border-radius:12px;padding:3px}
+[data-theme="lightStone"] .pregledSegments .btn{background:transparent;border:0;color:var(--mute)}
+[data-theme="lightStone"] .pregledSegments .btn.pri{background:#fff;color:var(--chalk);box-shadow:0 1px 3px rgba(30,36,33,.10)}
+[data-theme="lightStone"] .card:has(> .pregledSegments){background:transparent;box-shadow:none;padding:0}
+/* Progress: thin, calm */
+[data-theme="lightStone"] .bar{height:5px;background:#EEECE6}
+[data-theme="lightStone"] .bar>i{background:color-mix(in srgb,var(--g-deep) 35%,transparent)}
+[data-theme="lightStone"] .bar>i.full{background:var(--g-deep)}
+/* Charts: thinner line, smaller points */
+[data-theme="lightStone"] svg path[stroke]{stroke-width:1.6}
+[data-theme="lightStone"] svg circle{r:2.6px}
+/* Navigation: white, fine line icons, green only on the active icon */
+[data-theme="lightStone"] nav button{font-weight:550;color:#858B86}
+[data-theme="lightStone"] nav button .ic svg{stroke-width:1.55}
+[data-theme="lightStone"] nav button[aria-current="page"]{color:var(--chalk)}
+[data-theme="lightStone"] nav button[aria-current="page"] .ic{color:var(--g-deep)}
+[data-theme="lightStone"] .empty{color:var(--mute)}
+
 /* Theme preview tiles */
 .themeGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .themeTile{border:2px solid var(--line);border-radius:12px;padding:6px;background:none;text-align:left;cursor:pointer;color:var(--chalk)}
@@ -281,7 +331,7 @@ button{font:inherit}
 <dialog id="dlg"><div class="sheet" id="dlgBody"></div></dialog><div class="toast" id="toast"></div>
 <script>
 "use strict";
-const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,LOWER_CORE_FIX_VERSION=1,BUILD_ID="2026.11.27.11.0",BUILD_LABEL="Iteracija 11.0",BUILD_DATE="27.11.2026.";
+const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,LOWER_CORE_FIX_VERSION=1,BUILD_ID="2026.11.27.11.1",BUILD_LABEL="Iteracija 11.1",BUILD_DATE="27.11.2026.";
 const CATALOG_VERSION=2;
 const CORE_CHOICE_ID="__core_choice__",CORE_CHOICE_LABEL="Core — po izboru";
 const PODGRUPE=["Kvadriceps","Hamstring","Gluteus","Listovi","Grudi","Leđa","Rame — front","Rame — side","Rame — rear","Biceps","Triceps","Podlaktice","Trbuh/Core","Kardio"];
@@ -417,11 +467,11 @@ let storageWriteFailed=false;
 // ---- Visual themes: same layout, different palette. Semantic colours keep their meaning (ok/amber/hot). ----
 const THEMES={
   classic:{naziv:"Classic",opis:"dosadašnji izgled",light:false,meta:"#101317",v:{}},
-  lightStone:{naziv:"Light Stone",opis:"svijetla, zeleni akcenti",light:true,meta:"#F3F5F2",v:{
-    "--ink":"#F3F5F2","--panel":"#FFFFFF","--panel2":"#F2F5F2","--line":"#D5DDD6","--chalk":"#202D28","--mute":"#65746D","--steel":"#3F5A50",
-    "--g-deep":"#286B59","--g-lite":"#2B7A63","--amber":"#9A6110","--ok":"#2B7A63","--hot":"#B83E33","--on-acc":"#FFFFFF",
-    "--hdr":"rgba(243,245,242,.94)","--hdr-line":"rgba(32,45,40,.08)","--nav":"rgba(255,255,255,.97)","--nav-line":"rgba(32,45,40,.09)",
-    "--sep":"rgba(32,45,40,.08)","--shadow":"0 1px 2px rgba(32,45,40,.05)","--backdrop":"rgba(20,28,24,.45)"}},
+  lightStone:{naziv:"Light Stone",opis:"svijetla, kamen i tamnozelena",light:true,meta:"#ECEAE4",v:{
+    "--ink":"#ECEAE4","--panel":"#FFFFFF","--panel2":"#F4F3EF","--line":"#E2DFD7","--chalk":"#1E2421","--mute":"#6E7570","--steel":"#4A524D",
+    "--g-deep":"#23594B","--g-lite":"#23594B","--amber":"#9A6110","--ok":"#2B7A63","--hot":"#B83E33","--on-acc":"#FFFFFF",
+    "--hdr":"rgba(236,234,228,.94)","--hdr-line":"transparent","--nav":"rgba(255,255,255,.98)","--nav-line":"rgba(30,36,33,.07)",
+    "--sep":"rgba(30,36,33,.06)","--shadow":"0 1px 2px rgba(30,36,33,.04),0 2px 10px rgba(30,36,33,.03)","--backdrop":"rgba(24,28,26,.40)"}},
   warmSand:{naziv:"Warm Sand",opis:"topla, bež i bronza",light:true,meta:"#F5F0E8",v:{
     "--ink":"#F5F0E8","--panel":"#FFFDF9","--panel2":"#F4EEE4","--line":"#E2D6C5","--chalk":"#2E2620","--mute":"#76685B","--steel":"#5E4A38",
     "--g-deep":"#8A5A2B","--g-lite":"#87582A","--amber":"#B5471B","--ok":"#3D7A4E","--hot":"#B3372E","--on-acc":"#FFFFFF",
@@ -438,6 +488,7 @@ function applyTheme(name){
   Object.values(THEMES).forEach(x=>Object.keys(x.v).forEach(k=>root.style.removeProperty(k)));
   Object.entries(t.v).forEach(([k,v])=>root.style.setProperty(k,v));
   if(t.light)root.setAttribute("data-light","1");else root.removeAttribute("data-light");
+  root.setAttribute("data-theme",THEMES[name]?name:"classic");
   const m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content",t.meta);
   try{localStorage.setItem("trening_tema",THEMES[name]?name:"classic")}catch(e){}
 }
@@ -1205,7 +1256,7 @@ function kartStavka(s,i){
   const sub=[`plan ${s.plan}${s.pon?" × "+esc(s.pon):""}${s.prog?" ↗":""}`,s.odmor?esc(s.odmor):"",best?`najbolje ${best.kg!=null&&best.kg!==""?esc(best.kg)+"×":""}${best.pon}`:""].filter(Boolean).join(" · ");
   const row=(u,j)=>{
     const on=isDone(u),a=j===act,p=prev[j];
-    const line=`<div class="setline" style="margin:${a?"2px 0":"5px 0"}"><button class="btn sm gh" data-open="${i}:${j}" style="width:30px;min-width:30px;padding:0;border:none" aria-label="Otvori set ${j+1}"><span class="num ${a?"":"mute"}">${j+1}</span></button><input data-f="${i}:${j}:kg" value="${esc(u.kg)}" inputmode="decimal" placeholder="kg" aria-label="Težina set ${j+1}" style="width:76px;padding:8px"><span class="mute sm">×</span><input data-f="${i}:${j}:pon" value="${esc(u.pon)}" inputmode="numeric" placeholder="${esc(suggestedReps(s,j)||"pon")}" aria-label="Ponavljanja set ${j+1}" style="width:64px;padding:8px"><button class="btn sm ${on?"pri":"gh"}" data-ok="${i}:${j}" aria-label="Potvrdi set ${j+1}" style="min-width:44px">✓</button><span class="sm mute trunc" style="flex:1;min-width:0">${a?(p?"↺ "+esc((p.kg!==""?p.kg+"×":"")+p.pon):""):esc(setTrace(u))}</span></div>`;
+    const line=`<div class="setline${on?" done":""}" style="margin:${a?"2px 0":"5px 0"}"><button class="btn sm gh" data-open="${i}:${j}" style="width:30px;min-width:30px;padding:0;border:none" aria-label="Otvori set ${j+1}"><span class="num ${a?"":"mute"}">${j+1}</span></button><input data-f="${i}:${j}:kg" value="${esc(u.kg)}" inputmode="decimal" placeholder="kg" aria-label="Težina set ${j+1}" style="width:76px;padding:8px"><span class="mute sm">×</span><input data-f="${i}:${j}:pon" value="${esc(u.pon)}" inputmode="numeric" placeholder="${esc(suggestedReps(s,j)||"pon")}" aria-label="Ponavljanja set ${j+1}" style="width:64px;padding:8px"><button class="btn sm ${on?"pri":"gh"}" data-ok="${i}:${j}" aria-label="Potvrdi set ${j+1}" style="min-width:44px">✓</button><span class="sm mute trunc" style="flex:1;min-width:0">${a?(p?"↺ "+esc((p.kg!==""?p.kg+"×":"")+p.pon):""):esc(setTrace(u))}</span></div>`;
     if(!a)return line;
     return `<div style="border:1px solid var(--line);border-radius:12px;padding:4px 6px;margin:6px 0">${line}
       ${u.tip==="myo"?`<div class="row" style="gap:6px;margin:2px 0 4px 34px"><span class="xs" style="min-width:28px">mini</span><input data-f="${i}:${j}:mini" value="${esc(u.mini||"")}" inputmode="text" placeholder="npr. 4+4+3" aria-label="Myo mini serije set ${j+1}" style="width:110px;padding:6px"><span class="sm mute">= 2 seta</span></div>`:""}

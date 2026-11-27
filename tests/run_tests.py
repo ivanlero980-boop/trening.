@@ -400,7 +400,7 @@ async def themes_apply_and_persist(t: Ctx):
     check(await t.ev("S.tema") == "lightStone", "novi korisnik ne dobija Light Stone")
     await t.pg.fill("#wIme", "Ana"); await t.pg.click("#wOk"); await t.wait()
     bg = await t.ev("getComputedStyle(document.body).backgroundColor")
-    check(bg == "rgb(243, 245, 242)", f"Light Stone pozadina nije primijenjena: {bg}")
+    check(bg == "rgb(236, 234, 228)", f"Light Stone pozadina nije primijenjena: {bg}")
     await t.go("vise")
     await t.pg.click('[data-theme="graphite"]'); await t.wait()
     check(await t.ev("S.tema") == "graphite" and await t.ev("localStorage.getItem('trening_tema')") == "graphite", "izbor teme nije sačuvan")
