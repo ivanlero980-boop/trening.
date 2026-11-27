@@ -45,6 +45,7 @@ Na kraju se ispisuje `N/N testova prošlo`. Ako neki test padne, ispisuje se i r
 | `upgrade_from_old_version_keeps_data` | Podaci iz stare verzije (Iteracija 7.13) ostaju posle ažuriranja |
 | `offline_start_and_use` | Aplikacija se pokreće i radi bez interneta (service worker) |
 | `themes_apply_and_persist` | Teme: Light Stone za nove, izbor se čuva i zadržava, Classic vraća original |
+| `danas_and_week_overview` | Danas: sedmica, sljedeći trening, izbor, datum; Pregled: sedmica u toku bez procenta, grupe |
 | `week_and_year_change` | Prelazak u novu sedmicu i godinu: statusi, broj sedmice, zamrznute sedmice |
 
 Isti testovi mogu i na WebKit-u, engine-u koji koristi Safari na iPhone-u: `BROWSER=webkit python tests/run_tests.py` (prethodno `python -m playwright install webkit`). WebKit na računaru je blizu iPhone-a, ali nije isto: meni za dijeljenje, skladište i ažuriranje PWA na samom telefonu i dalje treba provjeriti ručno.

@@ -56,8 +56,8 @@ class Ctx:
     async def start_workout(self, label_prefix=None):
         await self.go("danas")
         if label_prefix:
-            val = await self.ev(f"[...document.querySelectorAll('#dSab option')].find(o=>o.textContent.startsWith({json.dumps(label_prefix)})).value")
-            await self.pg.select_option("#dSab", val)
+            # the workout picker is folded under "Drugi trening"; choose it the way the screen does
+            await self.ev(f"(()=>{{const sel=document.querySelector('#dSab');sel.value=[...sel.options].find(o=>o.textContent.startsWith({json.dumps(label_prefix)})).value;sel.dispatchEvent(new Event('change'))}})()")
         await self.pg.click("#dStart"); await self.wait()
     async def set_row(self, i, j, kg, reps, confirm=True):
         await self.pg.fill(f'input[data-f="{i}:{j}:kg"]', str(kg))
@@ -231,7 +231,7 @@ async def archived_workouts_and_frozen_past_weeks(t: Ctx):
     check(await t.ev("workoutsForWeek(monday(iso(new Date()))).length") == 1, "uklonjeni trening se i dalje nudi")
     check(await t.ev("S.dnevnik.every(l=>!l.sabId||activeCycle().sabloni.some(s=>s.id===l.sabId))"), "istorija je izgubila vezu sa uklonjenim treningom")
     await t.go("vise", "{mc:activeCycle().id}")
-    check("1× nedeljno" in await t.pg.inner_text("#view"), "arhivirani trening se broji u programu")
+    check("1× nedjeljno" in await t.pg.inner_text("#view"), "arhivirani trening se broji u programu")
 
 @test
 async def program_copy_only_after_save(t: Ctx):
@@ -409,6 +409,24 @@ async def themes_apply_and_persist(t: Ctx):
     await t.go("vise"); await t.pg.click('[data-theme="classic"]'); await t.wait()
     check(await t.ev("getComputedStyle(document.body).backgroundColor") == "rgb(23, 27, 32)", "povratak na Classic ne radi")
     check(await t.ev("getComputedStyle(document.documentElement).getPropertyValue('--amber').trim()") == "#D9A441", "Classic nije vratio originalne boje")
+
+@test
+async def danas_and_week_overview(t: Ctx):
+    await t.setup(); await t.ev("PROG().find(p=>p.id==='p1').treningIds=['u','l','u','l'];save()"); await t.new_cycle("p1")
+    await t.start_workout("Upper A"); await t.set_row(0, 0, 50, 8); await t.finish(); await t.close(); await t.go("danas")
+    chips = await t.ev("[...document.querySelectorAll('.wkchip')].map(b=>b.textContent.trim())")
+    check(len(chips) == 4 and chips[0].startswith("✓"), f"sedmica na ekranu Danas nije ispravna: {chips}")
+    check(await t.pg.inner_text("#dNextName") == "Lower A (1)", "sljedeći trening nije prvi neodrađeni")
+    await t.pg.click('.wkchip:nth-child(3)'); await t.wait()
+    check(await t.pg.inner_text("#dNextName") == "Upper A (2)" and "izabrani" in (await t.pg.inner_text("#dNextLbl")).lower(), "izbor treninga sa sedmice ne radi")
+    await t.pg.click("#dDate"); await t.wait(80)
+    check(await t.ev("getComputedStyle(document.querySelector('#dDateWrap')).display!=='none'"), "Drugi datum ne otvara izbor datuma")
+    check("Treninzi" in await t.pg.inner_text("#dStats") and "1/4" in (await t.pg.inner_text("#dStats")).replace(" ", ""), "pokazatelji sedmice nisu ispravni")
+    await t.ev("pregledMode='sedmica';go('pregled')"); await t.wait()
+    check(await t.ev("document.querySelector('.wkbar.sel').classList.contains('run')"), "sedmica u toku nije označena kao u toku")
+    txt = await t.pg.inner_text("#view")
+    check("u toku" in txt and "prema prethodnoj" not in txt, "za sedmicu u toku ne smije se prikazivati procentualna promjena")
+    check(await t.ev("document.querySelectorAll('details.grp').length") >= 2, "nema volumena po grupama")
 
 # ---------------------------------------------------------------- runner
 
