@@ -263,7 +263,7 @@ button{font:inherit}
 <dialog id="dlg"><div class="sheet" id="dlgBody"></div></dialog><div class="toast" id="toast"></div>
 <script>
 "use strict";
-const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,LOWER_CORE_FIX_VERSION=1,BUILD_ID="2026.11.27.9.2",BUILD_LABEL="Iteracija 9.2",BUILD_DATE="27.11.2026.";
+const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,LOWER_CORE_FIX_VERSION=1,BUILD_ID="2026.11.27.9.3",BUILD_LABEL="Iteracija 9.3",BUILD_DATE="27.11.2026.";
 const CATALOG_VERSION=2;
 const CORE_CHOICE_ID="__core_choice__",CORE_CHOICE_LABEL="Core — po izboru";
 const PODGRUPE=["Kvadriceps","Hamstring","Gluteus","Listovi","Grudi","Leđa","Rame — front","Rame — side","Rame — rear","Biceps","Triceps","Podlaktice","Trbuh/Core","Kardio"];
@@ -1153,7 +1153,16 @@ function exerciseMenu(i){
     if(m==="x")return closeDlg();
     if(m==="up"||m==="down"){const j=m==="up"?i-1:i+1;if(j<0||j>=n)return;[sesija.stavke[i],sesija.stavke[j]]=[sesija.stavke[j],sesija.stavke[i]];return redraw()}
     if(m==="swap"){closeDlg();return pickVezba(vpod(st.vezbaId),id=>{st.vezbaId=id;st.unosi=makeSetRows(id,st.plan,sesija.datum);st._open=null;sessionSave();CTX.keepScroll=1;render();CTX.keepScroll=0})}
-    if(m==="minus"){st.plan=Number(st.plan)-1;if(st.unosi.length>st.plan){let k=-1;for(let z=st.unosi.length-1;z>=0;z--){if(!isDone(st.unosi[z])&&!hasReps(st.unosi[z])){k=z;break}}if(k>=0)st.unosi.splice(k,1)}toast("Plan za ovu vježbu: "+st.plan);return redraw()}
+    if(m==="minus"){
+      const newPlan=Number(st.plan)-1;
+      // Keep rows in line with the plan: drop the last empty unconfirmed row; if none, the last filled unconfirmed row.
+      if(st.unosi.length>newPlan){
+        let k=-1;for(let z=st.unosi.length-1;z>=0;z--){if(!isDone(st.unosi[z])&&!hasReps(st.unosi[z])){k=z;break}}
+        if(k<0){for(let z=st.unosi.length-1;z>=0;z--){if(!isDone(st.unosi[z])){k=z;break}}
+          if(k>=0&&!confirm(`Set ${k+1} ima upisane podatke, ali nije potvrđen. Ukloniti ga?`))return;}
+        if(k>=0)st.unosi.splice(k,1);
+      }
+      st.plan=newPlan;st._open=null;toast("Plan za ovu vježbu: "+st.plan);return redraw()}
     if(m==="ss"){st.ss=!st.ss;return redraw()}
   });
 }
@@ -1234,7 +1243,7 @@ function inSupersetOf(session,s){const a=session.stavke,i=a.indexOf(s);return !!
 function finishWorkout(sab){
   const session=sesija;
   // Safety net: reps typed but not confirmed with ✓.
-  const pend=[];session.stavke.forEach(st=>(st.unosi||[]).forEach(u=>{if(hasReps(u)&&!isDone(u)&&u.done!==false)pend.push(u)}));
+  const pend=[];session.stavke.forEach(st=>(st.unosi||[]).forEach(u=>{if(hasReps(u)&&!isDone(u))pend.push(u)}));
   if(pend.length&&confirm(`${pend.length} ${pend.length===1?"set ima":"setova ima"} upisana ponavljanja, ali nije potvrđeno sa ✓. Upisati i ${pend.length===1?"njega":"njih"}?`))pend.forEach(u=>u.done=true);
   const records=[],groupDone={},exerciseDone=[];
   const sessionCycle=cycleForDate(session.datum)||activeCycle();
@@ -1597,31 +1606,33 @@ function vPregledMezociklus(f){
       <div class="card tight"><div class="row between"><span>${esc(g)}</span><b class="num">${n}</b></div></div>`).join("")||`<div class="empty">Još nema treninga u ovom ciklusu.</div>`}</div>`;
   bindPregledTabs();
 }
-let progRange="6";
+let progRange="6",progMetric="e1";
 // Best set per workout (by e1RM; myo-rep excluded). Range: last 6 workouts or since start of active cycle.
 function progressPoints(vid,range){
   const c=activeCycle(),by={};
-  S.dnevnik.forEach(l=>{if(l.vezbaId!==vid||!recordEligible(l))return;if(range==="ciklus"&&c&&l.mezociklusId!==c.id)return;const sc=setScore(l),cur=by[l.datum];if(!cur||sc>cur.score)by[l.datum]={datum:l.datum,kg:l.kg,pon:Number(l.pon)||0,score:sc,e1:e1rm(l.kg,l.pon)}});
+  S.dnevnik.forEach(l=>{if(l.vezbaId!==vid||!recordEligible(l))return;if(range==="ciklus"&&c&&l.mezociklusId!==c.id)return;const q={datum:l.datum,kg:l.kg,pon:Number(l.pon)||0,e1:e1rm(l.kg,l.pon)};q.score=progMetric==="kg"?(Number(l.kg)||0)*1000+q.pon:(progMetric==="pon"?q.pon*1000+(Number(l.kg)||0):setScore(l));const cur=by[l.datum];if(!cur||q.score>cur.score)by[l.datum]=q});
   let pts=Object.values(by).sort((x,y)=>x.datum.localeCompare(y.datum));
   if(range!=="ciklus")pts=pts.slice(-6);
   return pts;
 }
-function progressChart(pts){
-  const useE1=pts.some(p=>p.e1>0),vals=pts.map(p=>useE1?Math.round(p.e1):p.pon);
+function metricOf(p,m){return m==="kg"?(Number(p.kg)||0):(m==="pon"?p.pon:Math.round(p.e1||0))}
+function progressChart(pts,m){
+  const vals=pts.map(p=>metricOf(p,m));
   const w=320,h=150,pl=8,pr=8,pt=24,pb=26,mx=Math.max(...vals),mn=Math.min(...vals),span=(mx-mn)||Math.max(1,mx*.1),lo=mn-span*.25,hi=mx+span*.25;
   const P=vals.map((v,i)=>[pl+(vals.length>1?i/(vals.length-1):.5)*(w-pl-pr),pt+(1-(v-lo)/(hi-lo))*(h-pt-pb)]);
   const d=P.map((q,i)=>(i?"L":"M")+q[0].toFixed(1)+" "+q[1].toFixed(1)).join(" ");
-  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block">${vals.length>1?`<path d="${d}" fill="none" stroke="var(--g-lite)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`:""}${P.map((q,i)=>`<circle cx="${q[0].toFixed(1)}" cy="${q[1].toFixed(1)}" r="4" fill="var(--g-lite)"/><text x="${q[0].toFixed(1)}" y="${(q[1]-9).toFixed(1)}" text-anchor="${i===0&&P.length>1?"start":(i===P.length-1&&P.length>1?"end":"middle")}" font-size="11" font-weight="700" fill="var(--chalk)">${vals[i]}</text><text x="${q[0].toFixed(1)}" y="${h-8}" text-anchor="${i===0&&P.length>1?"start":(i===P.length-1&&P.length>1?"end":"middle")}" font-size="9.5" fill="var(--mute)">${esc(dmy(pts[i].datum).slice(0,5))}</text>`).join("")}</svg><div class="sm mute" style="margin-top:4px">${useE1?"Procijenjeni 1RM (kg) najboljeg seta na treningu":"Najviše ponavljanja na treningu"}</div>`;
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block">${vals.length>1?`<path d="${d}" fill="none" stroke="var(--g-lite)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`:""}${P.map((q,i)=>`<circle cx="${q[0].toFixed(1)}" cy="${q[1].toFixed(1)}" r="4" fill="var(--g-lite)"/><text x="${q[0].toFixed(1)}" y="${(q[1]-9).toFixed(1)}" text-anchor="${i===0&&P.length>1?"start":(i===P.length-1&&P.length>1?"end":"middle")}" font-size="11" font-weight="700" fill="var(--chalk)">${vals[i]}</text><text x="${q[0].toFixed(1)}" y="${h-8}" text-anchor="${i===0&&P.length>1?"start":(i===P.length-1&&P.length>1?"end":"middle")}" font-size="9.5" fill="var(--mute)">${esc(dmy(pts[i].datum).slice(0,5))}</text>`).join("")}</svg><div class="sm mute" style="margin-top:4px">${m==="kg"?"Najveća težina na treningu (kg)":(m==="pon"?"Najviše ponavljanja na treningu":"Procijenjeni 1RM (kg) najboljeg seta na treningu")}</div>`;
 }
 function progressCardHtml(vid){
   const c=activeCycle(),pts=progressPoints(vid,progRange);
   const chips=`<div class="row" style="gap:6px;margin:8px 0 10px"><button class="chip ${progRange==="6"?"on":""}" data-prange="6">Zadnjih 6 treninga</button><button class="chip ${progRange==="ciklus"?"on":""}" data-prange="ciklus">Od početka ciklusa${c?" ("+esc(c.naziv)+")":""}</button></div>`;
   if(!pts.length)return `<div class="card"><div class="xs">Progresija</div>${chips}<div class="empty">Nema unosa u izabranom periodu.</div></div>`;
-  const first=pts[0],last=pts[pts.length-1],key=last.e1?"e1":"pon",diff=Math.round((last[key]||0)-(first[key]||0)),pctv=first[key]?Math.round(diff/first[key]*100):0;
-  const rows=pts.slice().reverse().map((q,i,arr)=>{const prev=arr[i+1],dd=prev?Math.round((q[key]||0)-(prev[key]||0)):null;return `<div class="row between sm" style="padding:6px 0;border-top:1px solid var(--line)"><span>${dmy(q.datum)}</span><span><b class="num">${q.kg!=null&&q.kg!==""?esc(q.kg)+" kg × ":""}${q.pon}</b>${q.e1?` <span class="mute">· ${Math.round(q.e1)}</span>`:""}${dd!=null?` <span style="color:${dd>0?"var(--ok)":(dd<0?"var(--amber)":"var(--mute)")}">${dd>0?"+":""}${dd}</span>`:""}</span></div>`}).join("");
-  return `<div class="card"><div class="row between"><div class="xs">Progresija</div>${pts.length>1?`<span class="sm" style="color:${diff>0?"var(--ok)":(diff<0?"var(--amber)":"var(--mute)")}">${diff>0?"+":""}${diff}${key==="e1"?" kg":" pon."} (${pctv>0?"+":""}${pctv}%)</span>`:""}</div>${chips}${progressChart(pts)}<div style="margin-top:8px">${rows}</div></div>`;
+  const hasKg=pts.some(q=>Number(q.kg)>0);let m=progMetric;if(!hasKg&&m!=="pon")m="pon";
+  const first=pts[0],last=pts[pts.length-1],unit=m==="pon"?" pon.":" kg",r1=x=>Math.round(x*10)/10,diff=r1(metricOf(last,m)-metricOf(first,m)),pctv=metricOf(first,m)?Math.round(diff/metricOf(first,m)*100):0;
+  const rows=pts.slice().reverse().map((q,i,arr)=>{const prev=arr[i+1],dd=prev?r1(metricOf(q,m)-metricOf(prev,m)):null;return `<div class="row between sm" style="padding:6px 0;border-top:1px solid var(--line)"><span>${dmy(q.datum)}</span><span><b class="num">${q.kg!=null&&q.kg!==""?esc(q.kg)+" kg × ":""}${q.pon}</b>${q.e1?` <span class="mute">· ${Math.round(q.e1)}</span>`:""}${dd!=null?` <span style="color:${dd>0?"var(--ok)":(dd<0?"var(--amber)":"var(--mute)")}">${dd>0?"+":""}${dd}</span>`:""}</span></div>`}).join("");
+  return `<div class="card"><div class="row between"><div class="xs">Progresija</div>${pts.length>1?`<span class="sm" style="color:${diff>0?"var(--ok)":(diff<0?"var(--amber)":"var(--mute)")}">${diff>0?"+":""}${diff}${unit} (${pctv>0?"+":""}${pctv}%)</span>`:""}</div>${chips}${hasKg?`<div class="row" style="gap:6px;margin:-4px 0 10px">${[["e1","e1RM"],["kg","Max težina"],["pon","Ponavljanja"]].map(([k,n])=>`<button class="chip ${m===k?"on":""}" data-pmetric="${k}">${n}</button>`).join("")}</div>`:""}${progressChart(pts,m)}<div style="margin-top:8px">${rows}</div></div>`;
 }
-function bindProgressChips(){$("#view").querySelectorAll("[data-prange]").forEach(b=>b.onclick=()=>{progRange=b.dataset.prange;CTX.keepScroll=1;render();CTX.keepScroll=0})}
+function bindProgressChips(){$("#view").querySelectorAll("[data-prange]").forEach(b=>b.onclick=()=>{progRange=b.dataset.prange;CTX.keepScroll=1;render();CTX.keepScroll=0});$("#view").querySelectorAll("[data-pmetric]").forEach(b=>b.onclick=()=>{progMetric=b.dataset.pmetric;CTX.keepScroll=1;render();CTX.keepScroll=0})}
 function vPregledVezba(f){
   const used=new Set(S.dnevnik.map(l=>l.vezbaId));
   const list=S.vezbe.filter(x=>used.has(x.id)).sort((a,b)=>a.naziv.localeCompare(b.naziv,"sr"));
