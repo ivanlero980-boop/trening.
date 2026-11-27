@@ -354,6 +354,7 @@ async def upgrade_from_old_version_keeps_data(t: Ctx):
         check(now["sets"] == snap["sets"], f"broj setova se promijenio pri ažuriranju: {snap} → {now}")
         check(now["cycles"] >= 1 and now["vezbe"] >= snap["vezbe"] - 20, f"izgubljeni ciklusi ili vježbe: {snap} → {now}")
         check(now["ime"] == "Ivan Lero" and not now["welcome"], "postojeći korisnik je tretiran kao novi")
+        check(await t.ev("(S.tema||'classic')==='classic'&&getComputedStyle(document.body).backgroundColor==='rgb(23, 27, 32)'"), "postojeći korisnik nije zadržao dosadašnji izgled")
         for tab in ["danas", "pregled", "program", "vezbe", "vise"]: await t.go(tab)
     finally:
         old.unlink(missing_ok=True)
@@ -393,6 +394,21 @@ async def week_and_year_change(t: Ctx):
     check(await t.ev("cikNedelja(iso(new Date()),activeCycle())") == 2, "broj sedmice perioda preko nove godine je pogrešan")
     check(await t.ev("frozenWeek('2026-12-28',activeCycle())!==null"), "prošla sedmica (stara godina) nije zamrznuta")
     for tab in ["danas", "pregled", "vise"]: await t.go(tab)
+
+@test
+async def themes_apply_and_persist(t: Ctx):
+    check(await t.ev("S.tema") == "lightStone", "novi korisnik ne dobija Light Stone")
+    await t.pg.fill("#wIme", "Ana"); await t.pg.click("#wOk"); await t.wait()
+    bg = await t.ev("getComputedStyle(document.body).backgroundColor")
+    check(bg == "rgb(243, 245, 242)", f"Light Stone pozadina nije primijenjena: {bg}")
+    await t.go("vise")
+    await t.pg.click('[data-theme="graphite"]'); await t.wait()
+    check(await t.ev("S.tema") == "graphite" and await t.ev("localStorage.getItem('trening_tema')") == "graphite", "izbor teme nije sačuvan")
+    await t.pg.reload(); await t.wait(500)
+    check(await t.ev("getComputedStyle(document.body).backgroundColor") == "rgb(17, 19, 21)", "tema se nije zadržala posle ponovnog pokretanja")
+    await t.go("vise"); await t.pg.click('[data-theme="classic"]'); await t.wait()
+    check(await t.ev("getComputedStyle(document.body).backgroundColor") == "rgb(23, 27, 32)", "povratak na Classic ne radi")
+    check(await t.ev("getComputedStyle(document.documentElement).getPropertyValue('--amber').trim()") == "#D9A441", "Classic nije vratio originalne boje")
 
 # ---------------------------------------------------------------- runner
 

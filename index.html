@@ -7,6 +7,10 @@
 <meta name="apple-mobile-web-app-title" content="My Training">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#101317">
+<script>
+/* Light themes need dark status-bar text; iOS reads this at app launch. */
+try{var tm=localStorage.getItem("trening_tema");if(tm==="lightStone"||tm==="warmSand"){document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]').setAttribute("content","default");document.documentElement.setAttribute("data-light","1")}}catch(e){}
+</script>
 <title>My Training</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -24,6 +28,14 @@
   --amber:#D9A441;
   --ok:var(--g-deep);
   --hot:#F07B70;
+  --on-acc:#F0EEE7;
+  --hdr:rgba(18,20,23,.93);
+  --hdr-line:rgba(255,255,255,.07);
+  --nav:rgba(24,28,32,.98);
+  --nav-line:rgba(255,255,255,.08);
+  --sep:rgba(255,255,255,.075);
+  --shadow:0 8px 24px rgba(0,0,0,.10);
+  --backdrop:rgba(5,7,8,.76);
   --r:14px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -37,8 +49,8 @@ body{
 h1,h2,h3{margin:0;font-weight:780;letter-spacing:-.025em}
 .num{font-variant-numeric:tabular-nums;font-weight:780;letter-spacing:-.025em}
 header{
-  position:sticky;top:0;z-index:20;background:rgba(18,20,23,.93);
-  backdrop-filter:blur(16px);border-bottom:1px solid rgba(255,255,255,.07);
+  position:sticky;top:0;z-index:20;background:var(--hdr);
+  backdrop-filter:blur(16px);border-bottom:1px solid var(--hdr-line);
   padding:calc(13px + env(safe-area-inset-top)) 18px 12px;
 }
 .hrow{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
@@ -47,14 +59,14 @@ header h1{font-size:21px;color:var(--chalk)}
 main{padding:16px 16px 24px;max-width:640px;margin:0 auto}
 nav{
   position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;
-  background:rgba(24,28,32,.98);backdrop-filter:blur(16px);
-  border-top:1px solid rgba(255,255,255,.08);padding-bottom:env(safe-area-inset-bottom);
+  background:var(--nav);backdrop-filter:blur(16px);
+  border-top:1px solid var(--nav-line);padding-bottom:env(safe-area-inset-bottom);
 }
 nav button{flex:1;background:none;border:0;color:var(--mute);font:600 11px/1 inherit;padding:11px 2px 12px;display:flex;flex-direction:column;align-items:center;gap:5px;letter-spacing:.02em;cursor:pointer}
 nav button .ic{font-size:19px;line-height:1}
 nav button[aria-current="page"]{color:var(--chalk)}
 nav button[aria-current="page"] .ic{color:var(--g-lite)}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:15px;margin-bottom:11px;box-shadow:0 8px 24px rgba(0,0,0,.10)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:15px;margin-bottom:11px;box-shadow:var(--shadow)}
 .card.tight{padding:12px 14px}
 .row{display:flex;align-items:center;gap:10px}.between{justify-content:space-between}.grow{flex:1;min-width:0}.mute{color:var(--mute)}.sm{font-size:13px}.xs{font-size:11.5px;letter-spacing:.065em;text-transform:uppercase;color:var(--mute);font-weight:750}.trunc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 button.btn{background:var(--panel2);color:var(--chalk);border:1px solid var(--line);border-radius:11px;padding:11px 14px;font:650 15px inherit;cursor:pointer}
@@ -65,8 +77,8 @@ input,select,textarea{background:var(--panel2);color:var(--chalk);border:1px sol
 input:focus,select:focus,textarea:focus{outline:2px solid var(--g-deep);outline-offset:1px;border-color:var(--g-deep)}label.f{display:block;margin-bottom:10px}label.f>span{display:block;margin-bottom:5px}.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
 .chip{display:inline-block;background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:11.5px;color:var(--mute);font-weight:650}.chip.on{background:var(--g-deep);color:var(--chalk);border-color:var(--g-deep)}
 .bar{height:7px;background:var(--panel2);border-radius:99px;overflow:hidden;position:relative}.bar>i{display:block;height:100%;background:var(--g-deep);border-radius:99px}.bar>i.full{background:var(--g-lite)}.bar>i.over{background:var(--amber)}
-.setline{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid rgba(255,255,255,.075)}.setline .num{font-size:15px}
-dialog{border:0;padding:0;background:none;max-width:520px;width:calc(100% - 24px);color:var(--chalk)}dialog::backdrop{background:rgba(5,7,8,.76)}.sheet{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px;max-height:82vh;overflow:auto}.empty{text-align:center;color:var(--mute);padding:30px 10px;font-size:14.5px}.list{display:flex;flex-direction:column;gap:8px}hr.sep{border:0;border-top:1px solid var(--line);margin:12px 0}.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(88px + env(safe-area-inset-bottom));background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 15px;font-size:14px;z-index:60;opacity:0;pointer-events:none;transition:opacity .2s}.toast.show{opacity:1}svg.chart{width:100%;height:150px;display:block}
+.setline{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--sep)}.setline .num{font-size:15px}
+dialog{border:0;padding:0;background:none;max-width:520px;width:calc(100% - 24px);color:var(--chalk)}dialog::backdrop{background:var(--backdrop)}.sheet{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px;max-height:82vh;overflow:auto}.empty{text-align:center;color:var(--mute);padding:30px 10px;font-size:14.5px}.list{display:flex;flex-direction:column;gap:8px}hr.sep{border:0;border-top:1px solid var(--line);margin:12px 0}.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(88px + env(safe-area-inset-bottom));background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 15px;font-size:14px;z-index:60;opacity:0;pointer-events:none;transition:opacity .2s}.toast.show{opacity:1}svg.chart{width:100%;height:150px;display:block}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
 /* vNext-ui-fixes */
@@ -147,7 +159,7 @@ nav button[aria-current="page"] .ic{color:var(--g-lite)}
 
 button.btn.pri{
   background:var(--g-deep);
-  color:var(--chalk);
+  color:var(--on-acc);
   border-color:var(--g-deep);
 }
 button.btn.pri:active{filter:brightness(1.05)}
@@ -159,7 +171,7 @@ button.btn.pri:active{filter:brightness(1.05)}
 }
 .chip.on{
   background:var(--g-deep);
-  color:var(--chalk);
+  color:var(--on-acc);
   border-color:var(--g-deep);
 }
 
@@ -254,6 +266,12 @@ input,select,textarea{
 
 
 button{font:inherit}
+/* Theme preview tiles */
+.themeGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.themeTile{border:2px solid var(--line);border-radius:12px;padding:6px;background:none;text-align:left;cursor:pointer;color:var(--chalk)}
+.themeTile.on{border-color:var(--g-lite)}
+.themeTile .pv{border-radius:8px;padding:8px;height:74px;display:flex;flex-direction:column;gap:5px}
+.themeTile .pv i{display:block;border-radius:5px}
 </style>
 </head>
 <body>
@@ -263,7 +281,7 @@ button{font:inherit}
 <dialog id="dlg"><div class="sheet" id="dlgBody"></div></dialog><div class="toast" id="toast"></div>
 <script>
 "use strict";
-const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,LOWER_CORE_FIX_VERSION=1,BUILD_ID="2026.11.27.10.7",BUILD_LABEL="Iteracija 10.7",BUILD_DATE="27.11.2026.";
+const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,LOWER_CORE_FIX_VERSION=1,BUILD_ID="2026.11.27.11.0",BUILD_LABEL="Iteracija 11.0",BUILD_DATE="27.11.2026.";
 const CATALOG_VERSION=2;
 const CORE_CHOICE_ID="__core_choice__",CORE_CHOICE_LABEL="Core — po izboru";
 const PODGRUPE=["Kvadriceps","Hamstring","Gluteus","Listovi","Grudi","Leđa","Rame — front","Rame — side","Rame — rear","Biceps","Triceps","Podlaktice","Trbuh/Core","Kardio"];
@@ -396,6 +414,37 @@ function SAB(){
 }
 function syncLegacy(){const c=activeCycle();if(!c)return;S.ciklus={naziv:c.naziv,pocetak:c.pocetak,nedelja:c.trajanje||9};S.sabloni=clone(c.sabloni)}
 let storageWriteFailed=false;
+// ---- Visual themes: same layout, different palette. Semantic colours keep their meaning (ok/amber/hot). ----
+const THEMES={
+  classic:{naziv:"Classic",opis:"dosadašnji izgled",light:false,meta:"#101317",v:{}},
+  lightStone:{naziv:"Light Stone",opis:"svijetla, zeleni akcenti",light:true,meta:"#F3F5F2",v:{
+    "--ink":"#F3F5F2","--panel":"#FFFFFF","--panel2":"#F2F5F2","--line":"#D5DDD6","--chalk":"#202D28","--mute":"#65746D","--steel":"#3F5A50",
+    "--g-deep":"#286B59","--g-lite":"#2B7A63","--amber":"#9A6110","--ok":"#2B7A63","--hot":"#B83E33","--on-acc":"#FFFFFF",
+    "--hdr":"rgba(243,245,242,.94)","--hdr-line":"rgba(32,45,40,.08)","--nav":"rgba(255,255,255,.97)","--nav-line":"rgba(32,45,40,.09)",
+    "--sep":"rgba(32,45,40,.08)","--shadow":"0 1px 2px rgba(32,45,40,.05)","--backdrop":"rgba(20,28,24,.45)"}},
+  warmSand:{naziv:"Warm Sand",opis:"topla, bež i bronza",light:true,meta:"#F5F0E8",v:{
+    "--ink":"#F5F0E8","--panel":"#FFFDF9","--panel2":"#F4EEE4","--line":"#E2D6C5","--chalk":"#2E2620","--mute":"#76685B","--steel":"#5E4A38",
+    "--g-deep":"#8A5A2B","--g-lite":"#87582A","--amber":"#B5471B","--ok":"#3D7A4E","--hot":"#B3372E","--on-acc":"#FFFFFF",
+    "--hdr":"rgba(245,240,232,.94)","--hdr-line":"rgba(46,38,32,.08)","--nav":"rgba(255,253,249,.97)","--nav-line":"rgba(46,38,32,.09)",
+    "--sep":"rgba(46,38,32,.08)","--shadow":"0 1px 2px rgba(46,38,32,.05)","--backdrop":"rgba(30,24,18,.45)"}},
+  graphite:{naziv:"Graphite",opis:"moderna tamna, visok kontrast",light:false,meta:"#111315",v:{
+    "--ink":"#111315","--panel":"#1A1D21","--panel2":"#23272C","--line":"#31363D","--chalk":"#EDEFF1","--mute":"#959CA4","--steel":"#B3BAC2",
+    "--g-deep":"#1A7D52","--g-lite":"#52C892","--amber":"#E3A63E","--ok":"#4CC38A","--hot":"#F2786D","--on-acc":"#FFFFFF",
+    "--hdr":"rgba(17,19,21,.94)","--hdr-line":"rgba(255,255,255,.06)","--nav":"rgba(20,23,26,.98)","--nav-line":"rgba(255,255,255,.07)",
+    "--sep":"rgba(255,255,255,.07)","--shadow":"none","--backdrop":"rgba(0,0,0,.72)"}}
+};
+function applyTheme(name){
+  const t=THEMES[name]||THEMES.classic,root=document.documentElement;
+  Object.values(THEMES).forEach(x=>Object.keys(x.v).forEach(k=>root.style.removeProperty(k)));
+  Object.entries(t.v).forEach(([k,v])=>root.style.setProperty(k,v));
+  if(t.light)root.setAttribute("data-light","1");else root.removeAttribute("data-light");
+  const m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content",t.meta);
+  try{localStorage.setItem("trening_tema",THEMES[name]?name:"classic")}catch(e){}
+}
+function themeCardHtml(){
+  const cur=S.tema||"classic";
+  return `<div class="card"><div class="xs" style="margin-bottom:8px">Izgled aplikacije</div><div class="themeGrid">${Object.entries(THEMES).map(([k,t])=>{const v={...{"--ink":"#171B20","--panel":"#222830","--line":"#3A4350","--chalk":"#F0EEE7","--g-deep":"#0D7044","--mute":"#98A2AE"},...t.v};return `<button class="themeTile ${cur===k?"on":""}" data-theme="${k}" type="button"><div class="pv" style="background:${v["--ink"]}"><i style="background:${v["--panel"]};border:1px solid ${v["--line"]};height:26px"></i><div style="display:flex;gap:5px"><i style="background:${v["--g-deep"]};height:12px;width:40%"></i><i style="background:${v["--mute"]};height:12px;width:25%;opacity:.5"></i></div></div><div style="padding:6px 2px 2px"><b class="sm">${esc(t.naziv)}</b>${cur===k?' <span class="sm" style="color:var(--g-lite)">✓</span>':""}<div class="sm mute" style="font-size:11.5px">${esc(t.opis)}</div></div></button>`}).join("")}</div><div class="sm mute" style="margin-top:8px">Boja statusne trake (sat, baterija) se prilagođava pri sljedećem pokretanju aplikacije.</div></div>`;
+}
 function storageFailure(msg="Podaci nijesu sačuvani. Odmah napravi rezervnu kopiju."){storageWriteFailed=true;toast(msg);setTimeout(()=>{try{alert(msg)}catch(e){}},0)}
 function save(){try{syncLegacy();localStorage.setItem(KEY,JSON.stringify(S));storageWriteFailed=false;return true}catch(e){storageFailure();return false}}
 async function requestPersistentStorage(){try{if(navigator.storage&&navigator.storage.persist){const already=navigator.storage.persisted?await navigator.storage.persisted():false;if(!already)await navigator.storage.persist()}}catch(e){}}
@@ -770,7 +819,7 @@ function seed(){
   const V=[],byName={};
   for(const x of EXERCISE_CATALOG){const e=enrich[x.naziv]||[x.oprema||"",x.napomena||""];const v={id:uid(),naziv:x.naziv,podgrupa:x.podgrupa,oprema:e[0],napomena:e[1]};V.push(v);byName[x.naziv]=v.id}
   // New phone: exercise catalog only. Programs, workouts and mesocycles are set up by the user.
-  return {v:1,catalogVersion:CATALOG_VERSION,vezbe:V,sabloni:[],dnevnik:[],treningRekapitulacije:{},mezociklusi:[],ime:"",vokativ:"",noviKorisnik:true,bezCiklusa:true};
+  return {v:1,catalogVersion:CATALOG_VERSION,vezbe:V,sabloni:[],dnevnik:[],treningRekapitulacije:{},mezociklusi:[],ime:"",vokativ:"",noviKorisnik:true,bezCiklusa:true,tema:"lightStone"};
 }
 
 const vez=id=>S.vezbe.find(v=>v.id===id);const vname=id=>{if(id===CORE_CHOICE_ID)return CORE_CHOICE_LABEL;const v=vez(id);return v?v.naziv:"—"};const vpod=id=>{if(id===CORE_CHOICE_ID)return "Trbuh/Core";const v=vez(id);return v?v.podgrupa:""};
@@ -2295,7 +2344,7 @@ function trainingsSinceBackup(){
   return Math.max(0,now-base);
 }
 
-function vVise(f){if(CTX.mc){const c=cycleById(CTX.mc);if(c)return cycleDetail(c)}const c=activeCycle(),uk=S.dnevnik.reduce((a,l)=>a+Number(l.serije||0),0),dana=new Set(S.dnevnik.map(l=>l.datum)).size,cycles=[...(S.mezociklusi||[])].sort((a,b)=>(b.pocetak||"").localeCompare(a.pocetak||""));$("#view").innerHTML=`<div class="card"><div class="row between"><div><div class="xs">${c&&c.otvoren?"Aktivni program · bez ciklusa":(c?"Aktivni mezociklus":"Nije pokrenut program")}</div><h2 style="font-size:20px;margin-top:3px">${esc(c?c.naziv:"—")}</h2><div class="sm mute">${c?(c.otvoren?"od "+dmy(c.pocetak):dmy(c.pocetak)+" · "+c.trajanje+" nedelja"):""}</div>${c&&c.programNaziv?`<button class="btn sm gh" style="margin-top:7px" id="openCycleProgram">${esc(c.programNaziv)}</button>`:""}</div><span class="chip on">${c?esc(f.ime):"—"}</span></div><div class="btnrow" style="margin-top:14px;flex-wrap:wrap">${c&&!c.otvoren?`<button class="btn grow" id="cEdit">Uredi</button>`:""}<button class="btn ${S.bezCiklusa||(c&&c.otvoren)||!c?"pri":"gh"} grow" id="cOpen">${c&&c.otvoren?"Promijeni program":"Pokreni program"}</button><button class="btn ${S.bezCiklusa||(c&&c.otvoren)||!c?"gh":"pri"} grow" id="cNovi">+ Novi mezociklus</button></div>${S.bezCiklusa?"":`<div class="sm mute" style="margin-top:8px">Pokreni program = rad bez ciklusa po osnovnim serijama. Mezociklus dodaje nedjelje, progresiju i deload.</div>`}</div><div class="xs" style="margin:16px 0 8px">Istorija (ciklusi i rad bez ciklusa)</div><div class="list">${cycles.map(x=>{const l=logsForCycle(x.id),sets=l.reduce((a,z)=>a+Number(z.serije||0),0);return `<div class="card tight" data-mcopen="${x.id}" style="cursor:pointer"><div class="row between"><div><b>${esc(cleanWorkoutName(x.naziv))}${x.otvoren?' <span class="sm mute">· bez ciklusa</span>':""}</b><div class="sm mute">${dmy(x.pocetak)} · ${new Set(l.map(z=>z.datum)).size} treninga · ${sets} serija</div></div><span class="chip ${x.id===S.aktivniMezociklusId?"on":""}">${x.id===S.aktivniMezociklusId?"aktivan":"završen"}</span></div></div>`}).join("")}</div><div class="card" style="margin-top:14px"><div class="xs" style="margin-bottom:8px">Ukupno u aplikaciji</div><div class="g3"><div><div class="num" style="font-size:24px">${dana}</div><div class="sm mute">treninga</div></div><div><div class="num" style="font-size:24px">${uk}</div><div class="sm mute">serija</div></div><div><div class="num" style="font-size:24px">${S.vezbe.length}</div><div class="sm mute">vežbi</div></div></div></div><div class="card"><div class="xs" style="margin-bottom:8px">Korisnik</div><label class="f"><span class="sm mute">Ime (naslov aplikacije)</span><input id="uIme" value="${esc(S.ime||"")}" placeholder="ime i prezime"></label><label class="f" style="margin-bottom:0"><span class="sm mute">Obraćanje u porukama</span><input id="uVok" value="${esc(S.vokativ||"")}" placeholder="prazno = bez imena"></label></div><div class="card"><div class="row between"><div><div class="xs">Verzija aplikacije</div><b>${esc(BUILD_LABEL)}</b><div class="sm mute">Build ${esc(BUILD_ID)} · ${esc(BUILD_DATE)}</div></div><span class="chip">PWA</span></div></div><div class="card"><div class="xs" style="margin-bottom:8px">Biblioteka treninga</div><div class="sm mute" style="margin-bottom:10px">Podijeli svoje treninge i programe (bez istorije i mjerenja) ili uvezi tuđu biblioteku. Uvoz samo dodaje — ništa postojeće se ne briše.</div><div class="btnrow"><button class="btn grow" id="libExp">Podijeli biblioteku</button><button class="btn gh grow" id="libImp">Uvezi biblioteku</button></div><input type="file" id="libF" accept="application/json,.json" hidden></div><div class="card"><div class="xs" style="margin-bottom:8px">Rezervna kopija</div>${trainingsSinceBackup()>=10?`<div style="padding:9px 10px;margin-bottom:10px;border:1px solid var(--amber);border-radius:9px"><b>Vrijeme je za sigurnosnu kopiju</b><div class="sm mute">${trainingsSinceBackup()} treninga od posljednjeg izvoza.</div></div>`:""}<div class="sm mute" style="margin-bottom:10px">Podaci žive samo na ovom telefonu. Napravi kopiju s vremena na vreme.</div><div class="btnrow"><button class="btn grow" id="exp">Izvezi podatke</button><button class="btn gh grow" id="imp">Uvezi</button></div>${localStorage.getItem(PREIMPORT_KEY)?`<button class="btn gh" style="width:100%;margin-top:8px" id="restorePreImport">Vrati stanje prije posljednjeg importa</button>`:""}<input type="file" id="impF" accept="application/json" hidden></div><button class="btn gh danger" style="width:100%" id="reset">Obriši sve podatke</button>`;bindLibraryShare();(()=>{const a=$("#uIme"),b=$("#uVok");if(a)a.onchange=()=>{S.ime=a.value.trim();save();render();toast("Sačuvano")};if(b)b.onchange=()=>{S.vokativ=b.value.trim();save();toast("Sačuvano")}})();{const ce=$("#cEdit");if(ce)ce.onclick=()=>editCycleDialog(c)}$("#cOpen").onclick=openPeriodDialog;$("#cNovi").onclick=()=>newCycleDialog();const ocp=$("#openCycleProgram");if(ocp)ocp.onclick=()=>{const p=PROG().find(x=>x.id===c.sourceProgramId);if(p){go("program");setTimeout(()=>newProgramDialog(p),0)}};$("#view").querySelectorAll("[data-mcopen]").forEach(x=>x.onclick=()=>go("vise",{mc:x.dataset.mcopen,title:(cycleById(x.dataset.mcopen)||{}).otvoren?"Program":"Mezociklus"}));$("#exp").onclick=()=>{S.schemaVersion=SCHEMA_VERSION;S._backupTrainingCount=backupTrainingCount();S._lastBackup=iso(new Date());save();exportBackup()};$("#imp").onclick=()=>$("#impF").click();$("#impF").onchange=e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!validateImport(d))throw 0;const incoming=stateSummary(d),current=stateSummary(S);const less=incoming.sets<current.sets?`\n\nUPOZORENJE: kopija ima ${current.sets-incoming.sets} setova manje od trenutnog stanja.`:"";const msg=`Uvozim ${incoming.sets} setova, ${incoming.cycles} mezociklusa, posljednji trening ${incoming.last}.\n\nTrenutno imaš ${current.sets} setova i ${current.cycles} mezociklusa.${less}\n\nZameniti trenutne podatke?`;if(confirm(msg)&&(!less||confirm("Kopija ima manje podataka. Zaista nastaviti sa uvozom?"))){localStorage.setItem(PREIMPORT_KEY,JSON.stringify(S));S=d;runMigrations();render();toast("Uvezeno · prethodno stanje sačuvano")}}catch(err){toast("Fajl nije ispravan ili verzija nije podržana")}};r.readAsText(file)};const rp=$("#restorePreImport");if(rp)rp.onclick=()=>{if(!confirm("Vratiti stanje prije posljednjeg importa?"))return;try{const raw=localStorage.getItem(PREIMPORT_KEY);const d=JSON.parse(raw);if(!validateImport(d))throw 0;S=d;runMigrations();render();toast("Prethodno stanje vraćeno")}catch(e){toast("Sačuvano stanje nije ispravno")}};$("#reset").onclick=()=>{if(confirm("Obrisati sve? Ovo se ne može poništiti.")&&confirm("Sigurno? Napravi kopiju pre brisanja.")){localStorage.removeItem(KEY);sessionClear();load();runMigrations();requestPersistentStorage();render();
+function vVise(f){if(CTX.mc){const c=cycleById(CTX.mc);if(c)return cycleDetail(c)}const c=activeCycle(),uk=S.dnevnik.reduce((a,l)=>a+Number(l.serije||0),0),dana=new Set(S.dnevnik.map(l=>l.datum)).size,cycles=[...(S.mezociklusi||[])].sort((a,b)=>(b.pocetak||"").localeCompare(a.pocetak||""));$("#view").innerHTML=`<div class="card"><div class="row between"><div><div class="xs">${c&&c.otvoren?"Aktivni program · bez ciklusa":(c?"Aktivni mezociklus":"Nije pokrenut program")}</div><h2 style="font-size:20px;margin-top:3px">${esc(c?c.naziv:"—")}</h2><div class="sm mute">${c?(c.otvoren?"od "+dmy(c.pocetak):dmy(c.pocetak)+" · "+c.trajanje+" nedelja"):""}</div>${c&&c.programNaziv?`<button class="btn sm gh" style="margin-top:7px" id="openCycleProgram">${esc(c.programNaziv)}</button>`:""}</div><span class="chip on">${c?esc(f.ime):"—"}</span></div><div class="btnrow" style="margin-top:14px;flex-wrap:wrap">${c&&!c.otvoren?`<button class="btn grow" id="cEdit">Uredi</button>`:""}<button class="btn ${S.bezCiklusa||(c&&c.otvoren)||!c?"pri":"gh"} grow" id="cOpen">${c&&c.otvoren?"Promijeni program":"Pokreni program"}</button><button class="btn ${S.bezCiklusa||(c&&c.otvoren)||!c?"gh":"pri"} grow" id="cNovi">+ Novi mezociklus</button></div>${S.bezCiklusa?"":`<div class="sm mute" style="margin-top:8px">Pokreni program = rad bez ciklusa po osnovnim serijama. Mezociklus dodaje nedjelje, progresiju i deload.</div>`}</div><div class="xs" style="margin:16px 0 8px">Istorija (ciklusi i rad bez ciklusa)</div><div class="list">${cycles.map(x=>{const l=logsForCycle(x.id),sets=l.reduce((a,z)=>a+Number(z.serije||0),0);return `<div class="card tight" data-mcopen="${x.id}" style="cursor:pointer"><div class="row between"><div><b>${esc(cleanWorkoutName(x.naziv))}${x.otvoren?' <span class="sm mute">· bez ciklusa</span>':""}</b><div class="sm mute">${dmy(x.pocetak)} · ${new Set(l.map(z=>z.datum)).size} treninga · ${sets} serija</div></div><span class="chip ${x.id===S.aktivniMezociklusId?"on":""}">${x.id===S.aktivniMezociklusId?"aktivan":"završen"}</span></div></div>`}).join("")}</div><div class="card" style="margin-top:14px"><div class="xs" style="margin-bottom:8px">Ukupno u aplikaciji</div><div class="g3"><div><div class="num" style="font-size:24px">${dana}</div><div class="sm mute">treninga</div></div><div><div class="num" style="font-size:24px">${uk}</div><div class="sm mute">serija</div></div><div><div class="num" style="font-size:24px">${S.vezbe.length}</div><div class="sm mute">vežbi</div></div></div></div><div class="card"><div class="xs" style="margin-bottom:8px">Korisnik</div><label class="f"><span class="sm mute">Ime (naslov aplikacije)</span><input id="uIme" value="${esc(S.ime||"")}" placeholder="ime i prezime"></label><label class="f" style="margin-bottom:0"><span class="sm mute">Obraćanje u porukama</span><input id="uVok" value="${esc(S.vokativ||"")}" placeholder="prazno = bez imena"></label></div>${themeCardHtml()}<div class="card"><div class="row between"><div><div class="xs">Verzija aplikacije</div><b>${esc(BUILD_LABEL)}</b><div class="sm mute">Build ${esc(BUILD_ID)} · ${esc(BUILD_DATE)}</div></div><span class="chip">PWA</span></div></div><div class="card"><div class="xs" style="margin-bottom:8px">Biblioteka treninga</div><div class="sm mute" style="margin-bottom:10px">Podijeli svoje treninge i programe (bez istorije i mjerenja) ili uvezi tuđu biblioteku. Uvoz samo dodaje — ništa postojeće se ne briše.</div><div class="btnrow"><button class="btn grow" id="libExp">Podijeli biblioteku</button><button class="btn gh grow" id="libImp">Uvezi biblioteku</button></div><input type="file" id="libF" accept="application/json,.json" hidden></div><div class="card"><div class="xs" style="margin-bottom:8px">Rezervna kopija</div>${trainingsSinceBackup()>=10?`<div style="padding:9px 10px;margin-bottom:10px;border:1px solid var(--amber);border-radius:9px"><b>Vrijeme je za sigurnosnu kopiju</b><div class="sm mute">${trainingsSinceBackup()} treninga od posljednjeg izvoza.</div></div>`:""}<div class="sm mute" style="margin-bottom:10px">Podaci žive samo na ovom telefonu. Napravi kopiju s vremena na vreme.</div><div class="btnrow"><button class="btn grow" id="exp">Izvezi podatke</button><button class="btn gh grow" id="imp">Uvezi</button></div>${localStorage.getItem(PREIMPORT_KEY)?`<button class="btn gh" style="width:100%;margin-top:8px" id="restorePreImport">Vrati stanje prije posljednjeg importa</button>`:""}<input type="file" id="impF" accept="application/json" hidden></div><button class="btn gh danger" style="width:100%" id="reset">Obriši sve podatke</button>`;$("#view").querySelectorAll("[data-theme]").forEach(b=>b.onclick=()=>{S.tema=b.dataset.theme;save();applyTheme(S.tema);CTX.keepScroll=1;render();CTX.keepScroll=0;toast("Tema: "+THEMES[S.tema].naziv)});bindLibraryShare();(()=>{const a=$("#uIme"),b=$("#uVok");if(a)a.onchange=()=>{S.ime=a.value.trim();save();render();toast("Sačuvano")};if(b)b.onchange=()=>{S.vokativ=b.value.trim();save();toast("Sačuvano")}})();{const ce=$("#cEdit");if(ce)ce.onclick=()=>editCycleDialog(c)}$("#cOpen").onclick=openPeriodDialog;$("#cNovi").onclick=()=>newCycleDialog();const ocp=$("#openCycleProgram");if(ocp)ocp.onclick=()=>{const p=PROG().find(x=>x.id===c.sourceProgramId);if(p){go("program");setTimeout(()=>newProgramDialog(p),0)}};$("#view").querySelectorAll("[data-mcopen]").forEach(x=>x.onclick=()=>go("vise",{mc:x.dataset.mcopen,title:(cycleById(x.dataset.mcopen)||{}).otvoren?"Program":"Mezociklus"}));$("#exp").onclick=()=>{S.schemaVersion=SCHEMA_VERSION;S._backupTrainingCount=backupTrainingCount();S._lastBackup=iso(new Date());save();exportBackup()};$("#imp").onclick=()=>$("#impF").click();$("#impF").onchange=e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!validateImport(d))throw 0;const incoming=stateSummary(d),current=stateSummary(S);const less=incoming.sets<current.sets?`\n\nUPOZORENJE: kopija ima ${current.sets-incoming.sets} setova manje od trenutnog stanja.`:"";const msg=`Uvozim ${incoming.sets} setova, ${incoming.cycles} mezociklusa, posljednji trening ${incoming.last}.\n\nTrenutno imaš ${current.sets} setova i ${current.cycles} mezociklusa.${less}\n\nZameniti trenutne podatke?`;if(confirm(msg)&&(!less||confirm("Kopija ima manje podataka. Zaista nastaviti sa uvozom?"))){localStorage.setItem(PREIMPORT_KEY,JSON.stringify(S));S=d;runMigrations();applyTheme(S.tema);render();toast("Uvezeno · prethodno stanje sačuvano")}}catch(err){toast("Fajl nije ispravan ili verzija nije podržana")}};r.readAsText(file)};const rp=$("#restorePreImport");if(rp)rp.onclick=()=>{if(!confirm("Vratiti stanje prije posljednjeg importa?"))return;try{const raw=localStorage.getItem(PREIMPORT_KEY);const d=JSON.parse(raw);if(!validateImport(d))throw 0;S=d;runMigrations();applyTheme(S.tema);render();toast("Prethodno stanje vraćeno")}catch(e){toast("Sačuvano stanje nije ispravno")}};$("#reset").onclick=()=>{if(confirm("Obrisati sve? Ovo se ne može poništiti.")&&confirm("Sigurno? Napravi kopiju pre brisanja.")){localStorage.removeItem(KEY);sessionClear();load();runMigrations();applyTheme(S.tema);requestPersistentStorage();render();
 if(S.noviKorisnik){
   openDlg(`<h2 style="font-size:18px;margin-bottom:6px">Dobrodošlica</h2><div class="sm mute" style="margin-bottom:12px">Aplikacija je prazna — biblioteka vježbi je spremna. Podaci se čuvaju samo na ovom telefonu.</div><label class="f"><span class="sm mute">Ime</span><input id="wIme" placeholder="ime i prezime"></label><label class="f"><span class="sm mute">Obraćanje u porukama (opciono)</span><input id="wVok" placeholder="kako da ti se poruke obraćaju"></label><div class="sm mute" style="margin-bottom:12px">Sljedeći koraci: <b>Treninzi</b> → napravi treninge i od njih program, zatim na ekranu <b>Trening</b> → Pokreni program.</div><button class="btn pri" style="width:100%" id="wOk">Počni</button><button class="btn gh" style="width:100%;margin-top:8px" id="wLib">Imam fajl biblioteke treninga</button><input type="file" id="wLibF" accept="application/json,.json" hidden>`);
   $("#wLib").onclick=()=>$("#wLibF").click();
@@ -2303,7 +2352,7 @@ if(S.noviKorisnik){
   $("#wOk").onclick=()=>{S.ime=$("#wIme").value.trim();S.vokativ=$("#wVok").value.trim();delete S.noviKorisnik;save();closeDlg();render()};
 }toast("Obrisano")}}}
 function openDlg(html){$("#dlgBody").innerHTML=html;$("#dlg").showModal()}function closeDlg(){$("#dlg").close()}$("#dlg").addEventListener("click",e=>{if(e.target===$("#dlg"))closeDlg()});
-load();runMigrations();requestPersistentStorage();render();
+load();runMigrations();applyTheme(S.tema);requestPersistentStorage();render();
 if(S.noviKorisnik){
   openDlg(`<h2 style="font-size:18px;margin-bottom:6px">Dobrodošlica</h2><div class="sm mute" style="margin-bottom:12px">Aplikacija je prazna — biblioteka vježbi je spremna. Podaci se čuvaju samo na ovom telefonu.</div><label class="f"><span class="sm mute">Ime</span><input id="wIme" placeholder="ime i prezime"></label><label class="f"><span class="sm mute">Obraćanje u porukama (opciono)</span><input id="wVok" placeholder="kako da ti se poruke obraćaju"></label><div class="sm mute" style="margin-bottom:12px">Sljedeći koraci: <b>Treninzi</b> → napravi treninge i od njih program, zatim na ekranu <b>Trening</b> → Pokreni program.</div><button class="btn pri" style="width:100%" id="wOk">Počni</button><button class="btn gh" style="width:100%;margin-top:8px" id="wLib">Imam fajl biblioteke treninga</button><input type="file" id="wLibF" accept="application/json,.json" hidden>`);
   $("#wLib").onclick=()=>$("#wLibF").click();
