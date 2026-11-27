@@ -1,4 +1,4 @@
-const BUILD_ID="2026.11.27.8.6";
+const BUILD_ID="2026.11.27.9.0";
 const CACHE = "my-training-shell-"+BUILD_ID;
 const CORE = ["./index.html","./manifest.json"];
 const OPTIONAL = ["./apple-touch-icon.png","./icon-192.png","./icon-512.png"];
