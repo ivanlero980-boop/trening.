@@ -263,7 +263,7 @@ button{font:inherit}
 <dialog id="dlg"><div class="sheet" id="dlgBody"></div></dialog><div class="toast" id="toast"></div>
 <script>
 "use strict";
-const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,LOWER_CORE_FIX_VERSION=1,BUILD_ID="2026.11.27.3",BUILD_LABEL="Iteracija 8.2",BUILD_DATE="04.09.2026.";
+const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,LOWER_CORE_FIX_VERSION=1,BUILD_ID="2026.11.27.4",BUILD_LABEL="Iteracija 8.3",BUILD_DATE="04.09.2026.";
 const CATALOG_VERSION=2;
 const CORE_CHOICE_ID="__core_choice__",CORE_CHOICE_LABEL="Core — po izboru";
 const PODGRUPE=["Kvadriceps","Hamstring","Gluteus","Listovi","Grudi","Leđa","Rame — front","Rame — side","Rame — rear","Biceps","Triceps","Podlaktice","Trbuh/Core","Kardio"];
@@ -1615,90 +1615,104 @@ function selectedLibraryVolumeCard(ids){
 }
 
 
-// Print inside the app page. A popup window (window.open + document.write) is unreliable
-// in an iOS Home Screen app: it opens blank, print never starts, and there is no way back.
-function pdfPrintDocument(title,bodyHtml){
-  let host=document.getElementById("printHost");
-  if(!host){host=document.createElement("div");host.id="printHost";document.body.appendChild(host)}
-  if(!document.getElementById("printCss")){
-    const st=document.createElement("style");st.id="printCss";
-    st.textContent=`#printHost{display:none}
-    @media print{
-      @page{size:A4;margin:14mm}
-      html,body{background:#fff!important;color:#111!important}
-      body>*:not(#printHost){display:none!important}
-      #printHost{display:block!important;font:12px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;color:#111;background:#fff}
-      #printHost *{color:#111;background:transparent;box-sizing:border-box}
-      #printHost h1{font-size:22px;margin:0 0 4px} #printHost h2{font-size:16px;margin:22px 0 8px;padding-bottom:5px;border-bottom:1px solid #bbb}
-      #printHost .meta{color:#555;margin-bottom:14px} #printHost .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}
-      #printHost .box{border:1px solid #bbb;border-radius:8px;padding:9px} #printHost .big{font-size:18px;font-weight:700}
-      #printHost table{width:100%;border-collapse:collapse;margin:8px 0 16px}
-      #printHost th,#printHost td{border-bottom:1px solid #ddd;padding:7px 6px;text-align:left;vertical-align:top}
-      #printHost th{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#555}
-      #printHost tr{page-break-inside:avoid} #printHost .workout{page-break-inside:avoid;margin-bottom:18px}
-      #printHost .muted{color:#666} #printHost .note{font-size:11px;color:#555} #printHost .section{margin-top:15px}
-      #printHost ul{margin:5px 0 12px;padding-left:18px}
-    }`;
-    document.head.appendChild(st);
-  }
-  host.innerHTML=bodyHtml;
-  // Document title becomes the PDF file name.
-  const oldTitle=document.title;document.title=title||oldTitle;
-  let done=false;const cleanup=()=>{if(done)return;done=true;document.title=oldTitle;host.innerHTML="";window.removeEventListener("afterprint",cleanup)};
-  window.addEventListener("afterprint",cleanup);
-  try{window.print()}catch(e){toast("Štampa nije dostupna na ovom uređaju")}
-  // iOS sometimes skips afterprint; clean up later without affecting the print preview.
-  setTimeout(()=>{if(!done&&!window.matchMedia("print").matches)cleanup()},60000);
+// ---- PDF export ----
+// The app builds a real PDF file itself (pages drawn on canvas, embedded as JPEG) and opens the
+// share sheet. window.print() and popup windows do nothing in an iOS Home Screen app.
+const PDF_W=1240,PDF_H=1754,PDF_M=90,PDF_FONT='-apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,sans-serif';
+function pdfRenderPages(blocks){
+  const pages=[];let cv,ctx,y;
+  const font=(px,w)=>{ctx.font=`${w||400} ${px}px ${PDF_FONT}`};
+  const newPage=()=>{cv=document.createElement("canvas");cv.width=PDF_W;cv.height=PDF_H;ctx=cv.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,PDF_W,PDF_H);ctx.textBaseline="top";pages.push(cv);y=PDF_M};
+  const room=h=>{if(y+h>PDF_H-PDF_M){newPage();return true}return false};
+  const wrap=(t,maxW)=>{const out=[];String(t??"").split("\n").forEach(par=>{let line="";par.split(/\s+/).filter(Boolean).forEach(w=>{const tr=line?line+" "+w:w;if(ctx.measureText(tr).width<=maxW||!line)line=tr;else{out.push(line);line=w}});out.push(line)});return out.length?out:[""]};
+  const text=(t,x,px,w,color,maxW)=>{font(px,w);ctx.fillStyle=color||"#111";const lines=wrap(t,maxW||PDF_W-2*PDF_M-(x-PDF_M));const lh=Math.round(px*1.35);lines.forEach((ln,i)=>ctx.fillText(ln,x,y+i*lh));return lines.length*lh};
+  const hline=(yy,c)=>{ctx.fillStyle=c||"#ddd";ctx.fillRect(PDF_M,yy,PDF_W-2*PDF_M,2)};
+  const CW=PDF_W-2*PDF_M;
+  newPage();
+  blocks.forEach(bk=>{
+    if(bk.h1){room(60);y+=text(bk.h1,PDF_M,44,700)+6}
+    else if(bk.meta){room(36);y+=text(bk.meta,PDF_M,24,400,"#555")+20}
+    else if(bk.h2){room(110);y+=24;y+=text(bk.h2,PDF_M,32,700);y+=8;hline(y,"#bbb");y+=18}
+    else if(bk.sub){room(110);y+=10;y+=text(bk.sub,PDF_M,26,700);if(bk.note)y+=text(bk.note,PDF_M,21,400,"#666");y+=6}
+    else if(bk.summary){const n=bk.summary.length,gap=16,bw=(CW-gap*(n-1))/n,bh=104;room(bh+20);bk.summary.forEach(([l,v],i)=>{const x=PDF_M+i*(bw+gap);ctx.strokeStyle="#bbb";ctx.lineWidth=2;ctx.strokeRect(x,y,bw,bh);const y0=y;y+=16;text(l,x+18,21,400,"#666",bw-36);y+=32;text(v,x+18,36,700,"#111",bw-36);y=y0});y+=bh+20}
+    else if(bk.list){room(70);y+=text(bk.list,PDF_M,24,700);y+=4;bk.items.forEach(it=>{font(23);const lines=wrap(it,CW-40);room(lines.length*31+4);ctx.fillStyle="#111";ctx.fillText("•",PDF_M+8,y);y+=text(it,PDF_M+36,23,400,"#111",CW-40)+4});y+=14}
+    else if(bk.table){const t=bk.table,ws=t.widths.map(f=>f*CW),pad=12;
+      const head=()=>{font(19,600);room(44);let x=PDF_M;t.head.forEach((h,i)=>{ctx.fillStyle="#555";ctx.fillText(String(h).toUpperCase(),x+pad/2,y+8);x+=ws[i]});y+=38;hline(y,"#bbb");y+=4};
+      head();
+      t.rows.forEach(r=>{const cells=r.map((c,i)=>{const o=typeof c==="object"&&c?c:{t:c};font(o.small?20:23,o.b?700:400);const lines=wrap(o.t,ws[i]-pad);const sub=o.n?(font(19),wrap(o.n,ws[i]-pad)):[];return{o,lines,sub}});
+        const rh=Math.max(...cells.map(c=>c.lines.length*(c.o.small?27:31)+c.sub.length*25))+pad*2;
+        if(room(rh))head();
+        let x=PDF_M;cells.forEach((c,i)=>{let yy=y+pad;font(c.o.small?20:23,c.o.b?700:400);ctx.fillStyle=c.o.small?"#555":"#111";c.lines.forEach(ln=>{ctx.fillText(ln,x+pad/2,yy);yy+=c.o.small?27:31});font(19);ctx.fillStyle="#666";c.sub.forEach(ln=>{ctx.fillText(ln,x+pad/2,yy);yy+=25});x+=ws[i]});
+        y+=rh;hline(y-2)});
+      y+=24}
+  });
+  pages.forEach((c,i)=>{const k=c.getContext("2d");k.font=`400 18px ${PDF_FONT}`;k.fillStyle="#999";k.textBaseline="bottom";const t=`${i+1} / ${pages.length}`;k.fillText(t,PDF_W-PDF_M-k.measureText(t).width,PDF_H-40)});
+  return pages;
 }
-function plannedWorkoutRows(s){
-  return (s.stavke||[]).map((x,i)=>{
-    const ex=vez(x.vezbaId);
-    const note=x.napomena||ex?.napomena||"";
-    return `<tr><td>${i+1}</td><td><b>${esc(vname(x.vezbaId))}</b><div class="note">${esc(vpod(x.vezbaId)||"")}${x.ss?" · super set sa sljedećom":""}${x.prog?" · progresija serija":""}</div></td><td>${Number(x.b)||0}</td><td>${esc(x.pon||"")}</td><td>${esc(x.odmor||"")}</td><td class="note">${esc(note)}</td></tr>`;
-  }).join("");
+function pdfFromPages(pages){
+  const enc=new TextEncoder(),chunks=[],offs=[];let len=0;
+  const push=x=>{const u=typeof x==="string"?enc.encode(x):x;chunks.push(u);len+=u.length};
+  const obj=(n,body)=>{offs[n]=len;push(`${n} 0 obj\n`);body();push("\nendobj\n")};
+  const wPt=595.28,hPt=841.89,n=pages.length;
+  push("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n");
+  const kids=pages.map((_,i)=>`${3+i*3} 0 R`).join(" ");
+  obj(1,()=>push("<< /Type /Catalog /Pages 2 0 R >>"));
+  obj(2,()=>push(`<< /Type /Pages /Kids [${kids}] /Count ${n} >>`));
+  pages.forEach((cv,i)=>{
+    const pn=3+i*3,cn=pn+1,im=pn+2;
+    const b64=cv.toDataURL("image/jpeg",0.88).split(",")[1],bin=atob(b64),jpg=new Uint8Array(bin.length);for(let k=0;k<bin.length;k++)jpg[k]=bin.charCodeAt(k);
+    const content=`q ${wPt} 0 0 ${hPt} 0 0 cm /Im0 Do Q`;
+    obj(pn,()=>push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${wPt} ${hPt}] /Resources << /XObject << /Im0 ${im} 0 R >> >> /Contents ${cn} 0 R >>`));
+    obj(cn,()=>push(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`));
+    obj(im,()=>{push(`<< /Type /XObject /Subtype /Image /Width ${cv.width} /Height ${cv.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpg.length} >>\nstream\n`);push(jpg);push("\nendstream")});
+  });
+  const total=3+n*3,xref=len;
+  let x=`xref\n0 ${total}\n0000000000 65535 f \n`;for(let k=1;k<total;k++)x+=String(offs[k]).padStart(10,"0")+" 00000 n \n";
+  push(x+`trailer\n<< /Size ${total} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`);
+  return new Blob(chunks,{type:"application/pdf"});
 }
-function plannedWorkoutPrintHtml(s,showTitle=true){
-  return `${showTitle?`<h1>${esc(cleanWorkoutName(s.naziv))}</h1><div class="meta">Plan treninga${s.tip?` - ${esc(s.tip)}`:""}</div>`:`<h2>${esc(cleanWorkoutName(s.naziv))}</h2>`}
-    <table><thead><tr><th>#</th><th>Vježba</th><th>Setovi</th><th>Ponavljanja</th><th>Odmor</th><th>Napomena</th></tr></thead>
-    <tbody>${plannedWorkoutRows(s)}</tbody></table>`;
+function pdfFileName(t){return (String(t||"Trening").replace(/[\\/:*?"<>|]+/g,"").replace(/\s+/g," ").trim()||"Trening")+".pdf"}
+async function exportPdf(title,blocks){
+  let blob;
+  try{blob=pdfFromPages(pdfRenderPages(blocks))}catch(e){toast("PDF nije napravljen");return}
+  const name=pdfFileName(title);
+  try{
+    const file=new File([blob],name,{type:"application/pdf"});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:name.replace(/\.pdf$/,"")});return}
+  }catch(e){if(e&&e.name==="AbortError")return}
+  const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);toast("PDF preuzet");
 }
-function printWorkoutPlan(s){
-  if(!s)return;
-  pdfPrintDocument(cleanWorkoutName(s.naziv),plannedWorkoutPrintHtml(s,true));
+function plannedWorkoutBlocks(s,showTitle=true){
+  const out=showTitle?[{h1:cleanWorkoutName(s.naziv)},{meta:"Plan treninga"+(s.tip?" — "+s.tip:"")}]:[{h2:cleanWorkoutName(s.naziv)}];
+  out.push({table:{head:["#","Vježba","Setovi","Ponavljanja","Odmor","Napomena"],widths:[.05,.33,.09,.15,.12,.26],rows:(s.stavke||[]).map((x,i)=>{const ex=vez(x.vezbaId);const tags=[vpod(x.vezbaId)||"",x.ss?"super set sa sljedećom":"",x.prog?"progresija serija":""].filter(Boolean).join(" · ");return[String(i+1),{t:vname(x.vezbaId),b:1,n:tags},String(Number(x.b)||0),x.pon||"",x.odmor||"",{t:x.napomena||ex?.napomena||"",small:1}]})}});
+  return out;
 }
+function printWorkoutPlan(s){if(!s)return;exportPdf(cleanWorkoutName(s.naziv),plannedWorkoutBlocks(s,true))}
 function printProgramPlan(p){
   if(!p)return;
   const workouts=(p.treningIds||[]).map(id=>LIB().find(x=>x.id===id)).filter(Boolean);
-  const body=`<h1>${esc(p.naziv)}</h1><div class="meta">Program - ${workouts.length} treninga</div>${workouts.map(s=>`<div class="workout">${plannedWorkoutPrintHtml(s,false)}</div>`).join("")}`;
-  pdfPrintDocument(p.naziv,body);
+  exportPdf(p.naziv,[{h1:p.naziv},{meta:"Program — "+workouts.length+" treninga"},...workouts.flatMap(s=>plannedWorkoutBlocks(s,false))]);
 }
-function completedWorkoutPrintHtml(logs,recap){
-  const d=logs[0]?.datum||recap?.datum||"";
-  const groups=grupisiTrening(logs);
-  const ser=logs.reduce((a,l)=>a+Number(l.serije||0),0);
-  const vol=logs.reduce((a,l)=>a+(Number(l.kg)||0)*(Number(l.pon)||0)*(Number(l.serije)||0),0);
-  const title=recap?.naziv||"Trening";
-  const actual=Number(recap?.actual)||ser, plan=Number(recap?.planAll)||0;
-  const pct=plan?Math.round(actual/plan*100):null;
-  return `<h1>${esc(title)}</h1><div class="meta">${d?dmy(d):""}${recap?.dur?` - ${Number(recap.dur)} min`:""}</div>
-    <div class="summary">
-      <div class="box"><div class="muted">Radni setovi</div><div class="big">${actual}${plan?` / ${plan}`:""}</div></div>
-      <div class="box"><div class="muted">Volumen</div><div class="big">${Math.round(Number(recap?.volume)||vol).toLocaleString("sr-RS")} kg</div></div>
-      <div class="box"><div class="muted">Plan</div><div class="big">${pct==null?"-":pct+"%"}</div></div>
-    </div>
-    ${recap?.groupDone&&Object.keys(recap.groupDone).length?`<div class="section"><b>Po mišićnim grupama</b><ul>${Object.entries(recap.groupDone).map(([g,n])=>`<li>${esc(g)}: ${Number(n)||0} setova</li>`).join("")}</ul></div>`:""}
-    ${recap?.progress?.length?`<div class="section"><b>Napredak</b><ul>${recap.progress.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>`:""}
-    ${recap?.prs?.length?`<div class="section"><b>Lični rekordi</b><ul>${recap.prs.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>`:""}
-    ${recap?.advice?.length?`<div class="section"><b>Za sljedeći trening</b><ul>${recap.advice.slice(0,3).map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>`:""}
-    <h2>Odrađene vježbe i setovi</h2>
-    ${groups.map(([vid,rows])=>`<div class="workout"><b>${esc(vname(vid))}</b><div class="note">${esc(vpod(vid))}${rows.some(l=>l.ss)?" · super set":""}</div>
-      <table><thead><tr><th>Set</th><th>kg</th><th>Ponavljanja</th><th>RIR</th><th>Napomena</th></tr></thead><tbody>
-      ${rows.map((l,i)=>`<tr><td>${i+1}${l.tip!=="myo"&&Number(l.serije)>1?` (${Number(l.serije)}×)`:""}</td><td>${l.kg??""}</td><td>${l.pon??""}${l.tip==="myo"?` + ${esc(l.mini||"")} (myo)`:""}</td><td>${l.rir??""}</td><td class="note">${esc(l.napomena||"")}</td></tr>`).join("")}
-      </tbody></table></div>`).join("")}`;
+function completedWorkoutBlocks(logs,recap){
+  const d=logs[0]?.datum||recap?.datum||"",groups=grupisiTrening(logs);
+  const ser=logs.reduce((a,l)=>a+Number(l.serije||0),0),vol=logs.reduce((a,l)=>a+(Number(l.kg)||0)*(Number(l.pon)||0)*(Number(l.serije)||0),0);
+  const actual=Number(recap?.actual)||ser,plan=Number(recap?.planAll)||0,pct=plan?Math.round(actual/plan*100):null;
+  const out=[{h1:recap?.naziv||"Trening"},{meta:(d?dmy(d):"")+(recap?.dur?" · "+Number(recap.dur)+" min":"")},
+    {summary:[["Radni setovi",actual+(plan?" / "+plan:"")],["Volumen",Math.round(Number(recap?.volume)||vol).toLocaleString("sr-RS")+" kg"],["Plan",pct==null?"—":pct+"%"]]}];
+  if(recap?.groupDone&&Object.keys(recap.groupDone).length)out.push({list:"Po mišićnim grupama",items:Object.entries(recap.groupDone).map(([g,n])=>`${g}: ${Number(n)||0} setova`)});
+  if(recap?.progress?.length)out.push({list:"Napredak",items:recap.progress});
+  if(recap?.prs?.length)out.push({list:"Lični rekordi",items:recap.prs});
+  if(recap?.advice?.length)out.push({list:"Za sljedeći trening",items:recap.advice.slice(0,3)});
+  out.push({h2:"Odrađene vježbe i setovi"});
+  groups.forEach(([vid,rows])=>{
+    out.push({sub:vname(vid),note:vpod(vid)+(rows.some(l=>l.ss)?" · super set":"")});
+    out.push({table:{head:["Set","kg","Ponavljanja","RIR","Napomena"],widths:[.1,.12,.24,.1,.44],rows:rows.map((l,i)=>[String(i+1)+(l.tip!=="myo"&&Number(l.serije)>1?` (${Number(l.serije)}×)`:""),l.kg??"",String(l.pon??"")+(l.tip==="myo"?` + ${l.mini||""} (myo)`:""),l.rir??"",{t:l.napomena||"",small:1}])}});
+  });
+  return out;
 }
 function printCompletedWorkout(logs,recap){
   if(!logs||!logs.length)return;
-  pdfPrintDocument(recap?.naziv||("Trening "+dmy(logs[0].datum)),completedWorkoutPrintHtml(logs,recap));
+  exportPdf(recap?.naziv?`${recap.naziv} ${dmy(logs[0].datum)}`:("Trening "+dmy(logs[0].datum)),completedWorkoutBlocks(logs,recap));
 }
 
 function vProgram(f){
