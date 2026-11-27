@@ -11,13 +11,24 @@ Pokretanje:
     python tests/run_tests.py backup     # samo testovi čije ime sadrži "backup"
 
 Opciono: CHROME_PATH=/putanja/do/chrome za sistemski Chrome umjesto Playwright Chromium-a.
+         BROWSER=webkit za WebKit (isti engine kao Safari na iPhone-u; python -m playwright install webkit).
 """
-import asyncio, json, os, pathlib, sys, tempfile, traceback
+import asyncio, datetime, functools, http.server, json, os, pathlib, subprocess, sys, tempfile, threading, traceback
 from playwright.async_api import async_playwright
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 APP = (ROOT / "index.html").as_uri()
 TMP = pathlib.Path(tempfile.mkdtemp(prefix="mytraining-tests-"))
+# Last version before the 2026-11-27 rework (Iteracija 7.13) — used for the upgrade test.
+OLD_VERSION_COMMIT = "3548f85e5cbe0900fdb9e2c16df960a22343d66d"
+
+def serve_repo():
+    """Serves the repository over http://127.0.0.1 (service worker and offline mode need http)."""
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(ROOT))
+    handler.log_message = lambda *a, **k: None
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv, f"http://127.0.0.1:{srv.server_address[1]}/index.html"
 
 # Shared fixture: two programs (Upper/Lower and a Full body program that repeats one workout).
 SETUP = """()=>{closeDlg();delete S.noviKorisnik;delete S.bezCiklusa;S.ime='Test Korisnik';S.vokativ='Test';
@@ -288,6 +299,101 @@ async def all_screens_render(t: Ctx):
     await t.ev("detaljVezbe(S.dnevnik[0].vezbaId)"); await t.wait()
     await t.ev("detaljTreninga(S.dnevnik[0].sessionId)"); await t.wait()
 
+@test
+async def resume_unfinished_workout(t: Ctx):
+    await t.setup(); await t.new_cycle("p1"); await t.start_workout("Upper A")
+    await t.set_row(0, 0, 52.5, 9)
+    await t.set_row(0, 1, 52.5, 8, confirm=False)
+    await t.wait(900)                                 # session is saved with a short delay
+    asked = []
+    t.pg.remove_listener("dialog", t._dlg)
+    t.pg.on("dialog", lambda d: (asked.append(d.message), asyncio.ensure_future(d.accept())))
+    await t.pg.reload(); await t.wait(600)            # = app closed and opened again
+    check(any("nezavršen trening" in a for a in asked), "nema ponude da se nastavi nezavršen trening")
+    s = json.loads(await t.ev("JSON.stringify(sesija&&sesija.stavke[0].unosi.slice(0,2))"))
+    check(s and s[0]["pon"] == "9" and s[0]["done"] is True and s[1]["pon"] == "8" and not s[1].get("done"), f"nastavljeni trening nije isti: {s}")
+    await t.set_row(0, 1, 52.5, 8)                    # confirm it now
+    await t.finish()
+    check(await t.ev("S.dnevnik.length") == 2, "posle nastavka trening nije ispravno upisan")
+
+@test
+async def corrupted_backup_is_rejected(t: Ctx):
+    await t.setup(); await t.new_cycle("p1")
+    await t.start_workout("Upper A"); await t.set_row(0, 0, 50, 8); await t.finish(); await t.close()
+    before = await t.ev("localStorage.getItem(KEY)")
+    bad = {
+        "nije_json.json": "{ovo nije json",
+        "pogresna_struktura.json": json.dumps({"nesto": 1}),
+        "buduca_verzija.json": json.dumps({"vezbe": [], "dnevnik": [], "schemaVersion": 999}),
+        "biblioteka_umjesto_kopije.json": json.dumps({"tip": "my-training-biblioteka", "treninzi": []}),
+    }
+    await t.go("vise")
+    for name, content in bad.items():
+        f = TMP / name; f.write_text(content, encoding="utf-8")
+        await t.pg.set_input_files("#impF", str(f)); await t.wait(400)
+        check(await t.ev("localStorage.getItem(KEY)") == before, f"neispravan fajl {name} je promijenio podatke")
+        await t.go("vise")
+    check(await t.ev("S.dnevnik.length") == 1, "podaci su se promijenili posle neispravnog uvoza")
+
+@test
+async def upgrade_from_old_version_keeps_data(t: Ctx):
+    try:
+        old_html = subprocess.run(["git", "-C", str(ROOT), "show", f"{OLD_VERSION_COMMIT}:index.html"], capture_output=True, check=True).stdout
+    except Exception:
+        print("         (preskočeno: stara verzija nije dostupna u git istoriji — za CI treba fetch-depth: 0)"); return
+    old = ROOT / "tests" / ".old_index.html"; old.write_bytes(old_html)   # same folder = same file:// storage
+    try:
+        await t.ev("localStorage.clear()")                                 # start from the old version's own first run
+        await t.pg.goto(old.as_uri()); await t.wait(600)
+        await t.pg.evaluate("()=>{try{closeDlg()}catch(e){}}")
+        snap = json.loads(await t.ev("JSON.stringify({logs:S.dnevnik.length,sets:S.dnevnik.reduce((a,l)=>a+Number(l.serije||1),0),cycles:(S.mezociklusi||[]).length,vezbe:S.vezbe.length})"))
+        check(snap["logs"] > 0, "stara verzija nije napravila podatke")
+        await t.pg.goto(APP); await t.wait(700)                             # new version reads the same storage
+        await t.ev("()=>{try{closeDlg()}catch(e){}}")
+        now = json.loads(await t.ev("JSON.stringify({logs:S.dnevnik.length,sets:S.dnevnik.reduce((a,l)=>a+Number(l.serije||1),0),cycles:S.mezociklusi.length,vezbe:S.vezbe.length,ime:S.ime,welcome:!!document.getElementById('wIme')})"))
+        check(now["sets"] == snap["sets"], f"broj setova se promijenio pri ažuriranju: {snap} → {now}")
+        check(now["cycles"] >= 1 and now["vezbe"] >= snap["vezbe"] - 20, f"izgubljeni ciklusi ili vježbe: {snap} → {now}")
+        check(now["ime"] == "Ivan Lero" and not now["welcome"], "postojeći korisnik je tretiran kao novi")
+        for tab in ["danas", "pregled", "program", "vezbe", "vise"]: await t.go(tab)
+    finally:
+        old.unlink(missing_ok=True)
+
+@test
+async def offline_start_and_use(t: Ctx):
+    srv, url = serve_repo()
+    try:
+        await t.pg.goto(url); await t.wait(800)
+        await t.ev("navigator.serviceWorker.ready.then(()=>true)")
+        await t.pg.reload(); await t.wait(800)                             # second load fills the cache
+        await t.ev("()=>{try{closeDlg()}catch(e){}}")
+        await t.setup(); await t.new_cycle("p1")
+        await t.pg.context.set_offline(True)
+        await t.pg.reload(); await t.wait(2500)                            # offline start (sw waits up to 1.5 s for network)
+        check(await t.ev("typeof S==='object'&&S.mezociklusi.length===1"), "aplikacija se nije pokrenula bez interneta")
+        await t.start_workout("Upper A"); await t.set_row(0, 0, 50, 8); await t.finish(); await t.close()
+        check(await t.ev("S.dnevnik.length") == 1, "trening bez interneta nije sačuvan")
+    finally:
+        await t.pg.context.set_offline(False); srv.shutdown()
+
+@test
+async def week_and_year_change(t: Ctx):
+    await t.pg.clock.set_fixed_time(datetime.datetime(2026, 12, 30, 10, 0))   # Wednesday
+    await t.pg.reload(); await t.wait(500); await t.ev("()=>{try{closeDlg()}catch(e){}}")
+    await t.setup(); await t.ev("startOpenPeriod(PROG().find(p=>p.id==='p1'));render()")
+    check(await t.ev("monday(iso(new Date()))") == "2026-12-28", "pogrešan ponedjeljak u sedmici preko nove godine")
+    await t.start_workout("Upper A"); await t.set_row(0, 0, 50, 8); await t.finish(); await t.close()
+    check(await t.ev("weeklyPlanIds().map(id=>plannedWorkoutStatus(id)).join(',')") == "done,pending", "status u staroj godini")
+    await t.pg.clock.set_fixed_time(datetime.datetime(2027, 1, 1, 10, 0))     # same week, new year
+    await t.pg.reload(); await t.wait(500); await t.ev("()=>{try{closeDlg()}catch(e){}}")
+    check(await t.ev("weeklyPlanIds().map(id=>plannedWorkoutStatus(id)).join(',')") == "done,pending", "nova godina u istoj sedmici je resetovala status")
+    await t.pg.clock.set_fixed_time(datetime.datetime(2027, 1, 4, 10, 0))     # Monday, new week
+    await t.pg.reload(); await t.wait(500); await t.ev("()=>{try{closeDlg()}catch(e){}}")
+    check(await t.ev("pon0") == "2027-01-04", "nova sedmica nije prepoznata")
+    check(await t.ev("weeklyPlanIds().map(id=>plannedWorkoutStatus(id)).join(',')") == "pending,pending", "nova sedmica nije počela iz početka")
+    check(await t.ev("cikNedelja(iso(new Date()),activeCycle())") == 2, "broj sedmice perioda preko nove godine je pogrešan")
+    check(await t.ev("frozenWeek('2026-12-28',activeCycle())!==null"), "prošla sedmica (stara godina) nije zamrznuta")
+    for tab in ["danas", "pregled", "vise"]: await t.go(tab)
+
 # ---------------------------------------------------------------- runner
 
 async def run_one(browser, fn):
@@ -311,9 +417,11 @@ async def main():
     flt = sys.argv[1] if len(sys.argv) > 1 else ""
     sel = [f for f in TESTS if flt in f.__name__]
     async with async_playwright() as p:
-        kw = {"args": ["--no-sandbox"]}
-        if os.environ.get("CHROME_PATH"): kw["executable_path"] = os.environ["CHROME_PATH"]
-        browser = await p.chromium.launch(**kw)
+        engine = os.environ.get("BROWSER", "chromium")
+        kw = {} if engine == "webkit" else {"args": ["--no-sandbox"]}
+        if engine == "chromium" and os.environ.get("CHROME_PATH"): kw["executable_path"] = os.environ["CHROME_PATH"]
+        browser = await getattr(p, engine).launch(**kw)
+        print(f"Pregledač: {engine}\n")
         failed = 0
         for fn in sel:
             err = await run_one(browser, fn)

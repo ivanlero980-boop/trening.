@@ -40,7 +40,20 @@ Na kraju se ispisuje `N/N testova prošlo`. Ako neki test padne, ispisuje se i r
 | `cycle_analytics` | Napredak u ciklusu, deload isključen, bez prosjeka |
 | `backup_roundtrip` | Izvoz i uvoz rezervne kopije vraćaju identično stanje |
 | `all_screens_render` | Svi ekrani se otvaraju bez JS grešaka |
+| `resume_unfinished_workout` | Nezavršen trening se nastavlja posle zatvaranja aplikacije |
+| `corrupted_backup_is_rejected` | Oštećena ili pogrešna rezervna kopija ne mijenja podatke |
+| `upgrade_from_old_version_keeps_data` | Podaci iz stare verzije (Iteracija 7.13) ostaju posle ažuriranja |
+| `offline_start_and_use` | Aplikacija se pokreće i radi bez interneta (service worker) |
+| `week_and_year_change` | Prelazak u novu sedmicu i godinu: statusi, broj sedmice, zamrznute sedmice |
+
+Isti testovi mogu i na WebKit-u, engine-u koji koristi Safari na iPhone-u: `BROWSER=webkit python tests/run_tests.py` (prethodno `python -m playwright install webkit`). WebKit na računaru je blizu iPhone-a, ali nije isto: meni za dijeljenje, skladište i ažuriranje PWA na samom telefonu i dalje treba provjeriti ručno.
+
+## Automatsko pokretanje (GitHub Actions)
+
+`.github/workflows/testovi.yml` pokreće sve testove posle svake izmjene na `main` i za svaki pull request, u Chromium-u i WebKit-u. Aplikacija se objavljuje na GitHub Pages **samo ako testovi u Chromium-u prođu**. WebKit je za sada informativan, a kad prvi put prođe, može postati obavezan (ukloniti `continue-on-error`).
+
+Da bi objava zavisila od testova, u repozitoriju treba jednom podesiti: **Settings → Pages → Build and deployment → Source: GitHub Actions**. Dok je tamo „Deploy from a branch“, GitHub objavljuje svaku izmjenu odmah, bez obzira na testove.
 
 ## Pravilo
 
-Svaku izmjenu `index.html` provjeriti pokretanjem testova prije objave na `main`. Za novu funkcionalnost dodati test u `run_tests.py` (dekorator `@test`).
+Nijedna verzija ne ide u produkciju dok svi testovi ne prođu. Svaka pronađena greška dobija test koji sprečava da se ponovi. Za novu funkcionalnost dodati test u `run_tests.py` (dekorator `@test`).
