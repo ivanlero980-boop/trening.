@@ -263,7 +263,7 @@ button{font:inherit}
 <dialog id="dlg"><div class="sheet" id="dlgBody"></div></dialog><div class="toast" id="toast"></div>
 <script>
 "use strict";
-const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,LOWER_CORE_FIX_VERSION=1,BUILD_ID="2026.11.27.2",BUILD_LABEL="Iteracija 8.1",BUILD_DATE="04.09.2026.";
+const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,LOWER_CORE_FIX_VERSION=1,BUILD_ID="2026.11.27.3",BUILD_LABEL="Iteracija 8.2",BUILD_DATE="04.09.2026.";
 const CATALOG_VERSION=2;
 const CORE_CHOICE_ID="__core_choice__",CORE_CHOICE_LABEL="Core — po izboru";
 const PODGRUPE=["Kvadriceps","Hamstring","Gluteus","Listovi","Grudi","Leđa","Rame — front","Rame — side","Rame — rear","Biceps","Triceps","Podlaktice","Trbuh/Core","Kardio"];
@@ -1615,34 +1615,46 @@ function selectedLibraryVolumeCard(ids){
 }
 
 
+// Print inside the app page. A popup window (window.open + document.write) is unreliable
+// in an iOS Home Screen app: it opens blank, print never starts, and there is no way back.
 function pdfPrintDocument(title,bodyHtml){
-  const w=window.open("","_blank");
-  if(!w){toast("Dozvoli otvaranje prozora za PDF");return}
-  const doc=`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>${esc(title)}</title>
-  <style>
-    @page{size:A4;margin:14mm}
-    *{box-sizing:border-box}
-    body{font:12px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;color:#111;background:#fff;margin:0}
-    h1{font-size:22px;margin:0 0 4px} h2{font-size:16px;margin:22px 0 8px;padding-bottom:5px;border-bottom:1px solid #bbb}
-    .meta{color:#555;margin-bottom:14px}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}
-    .box{border:1px solid #bbb;border-radius:8px;padding:9px}.big{font-size:18px;font-weight:700}
-    table{width:100%;border-collapse:collapse;margin:8px 0 16px;page-break-inside:auto}
-    th,td{border-bottom:1px solid #ddd;padding:7px 6px;text-align:left;vertical-align:top}
-    th{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#555}
-    tr{page-break-inside:avoid;page-break-after:auto}
-    .workout{page-break-inside:avoid;margin-bottom:18px}
-    .muted{color:#666}.note{font-size:11px;color:#555}.section{margin-top:15px}
-    ul{margin:5px 0 12px;padding-left:18px}
-    @media print{.no-print{display:none!important}}
-  </style></head><body>${bodyHtml}<script>window.addEventListener("load",()=>setTimeout(()=>window.print(),120));<\/script></body></html>`;
-  w.document.open();w.document.write(doc);w.document.close();
+  let host=document.getElementById("printHost");
+  if(!host){host=document.createElement("div");host.id="printHost";document.body.appendChild(host)}
+  if(!document.getElementById("printCss")){
+    const st=document.createElement("style");st.id="printCss";
+    st.textContent=`#printHost{display:none}
+    @media print{
+      @page{size:A4;margin:14mm}
+      html,body{background:#fff!important;color:#111!important}
+      body>*:not(#printHost){display:none!important}
+      #printHost{display:block!important;font:12px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;color:#111;background:#fff}
+      #printHost *{color:#111;background:transparent;box-sizing:border-box}
+      #printHost h1{font-size:22px;margin:0 0 4px} #printHost h2{font-size:16px;margin:22px 0 8px;padding-bottom:5px;border-bottom:1px solid #bbb}
+      #printHost .meta{color:#555;margin-bottom:14px} #printHost .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}
+      #printHost .box{border:1px solid #bbb;border-radius:8px;padding:9px} #printHost .big{font-size:18px;font-weight:700}
+      #printHost table{width:100%;border-collapse:collapse;margin:8px 0 16px}
+      #printHost th,#printHost td{border-bottom:1px solid #ddd;padding:7px 6px;text-align:left;vertical-align:top}
+      #printHost th{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#555}
+      #printHost tr{page-break-inside:avoid} #printHost .workout{page-break-inside:avoid;margin-bottom:18px}
+      #printHost .muted{color:#666} #printHost .note{font-size:11px;color:#555} #printHost .section{margin-top:15px}
+      #printHost ul{margin:5px 0 12px;padding-left:18px}
+    }`;
+    document.head.appendChild(st);
+  }
+  host.innerHTML=bodyHtml;
+  // Document title becomes the PDF file name.
+  const oldTitle=document.title;document.title=title||oldTitle;
+  let done=false;const cleanup=()=>{if(done)return;done=true;document.title=oldTitle;host.innerHTML="";window.removeEventListener("afterprint",cleanup)};
+  window.addEventListener("afterprint",cleanup);
+  try{window.print()}catch(e){toast("Štampa nije dostupna na ovom uređaju")}
+  // iOS sometimes skips afterprint; clean up later without affecting the print preview.
+  setTimeout(()=>{if(!done&&!window.matchMedia("print").matches)cleanup()},60000);
 }
 function plannedWorkoutRows(s){
   return (s.stavke||[]).map((x,i)=>{
     const ex=vez(x.vezbaId);
     const note=x.napomena||ex?.napomena||"";
-    return `<tr><td>${i+1}</td><td><b>${esc(vname(x.vezbaId))}</b><div class="note">${esc(vpod(x.vezbaId)||"")}</div></td><td>${Number(x.b)||0}</td><td>${esc(x.pon||"")}</td><td>${esc(x.odmor||"")}</td><td class="note">${esc(note)}</td></tr>`;
+    return `<tr><td>${i+1}</td><td><b>${esc(vname(x.vezbaId))}</b><div class="note">${esc(vpod(x.vezbaId)||"")}${x.ss?" · super set sa sljedećom":""}${x.prog?" · progresija serija":""}</div></td><td>${Number(x.b)||0}</td><td>${esc(x.pon||"")}</td><td>${esc(x.odmor||"")}</td><td class="note">${esc(note)}</td></tr>`;
   }).join("");
 }
 function plannedWorkoutPrintHtml(s,showTitle=true){
@@ -1679,9 +1691,9 @@ function completedWorkoutPrintHtml(logs,recap){
     ${recap?.prs?.length?`<div class="section"><b>Lični rekordi</b><ul>${recap.prs.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>`:""}
     ${recap?.advice?.length?`<div class="section"><b>Za sljedeći trening</b><ul>${recap.advice.slice(0,3).map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>`:""}
     <h2>Odrađene vježbe i setovi</h2>
-    ${groups.map(([vid,rows])=>`<div class="workout"><b>${esc(vname(vid))}</b><div class="note">${esc(vpod(vid))}</div>
+    ${groups.map(([vid,rows])=>`<div class="workout"><b>${esc(vname(vid))}</b><div class="note">${esc(vpod(vid))}${rows.some(l=>l.ss)?" · super set":""}</div>
       <table><thead><tr><th>Set</th><th>kg</th><th>Ponavljanja</th><th>RIR</th><th>Napomena</th></tr></thead><tbody>
-      ${rows.map((l,i)=>`<tr><td>${i+1}</td><td>${l.kg??""}</td><td>${l.pon??""}</td><td>${l.rir??""}</td><td class="note">${esc(l.napomena||"")}</td></tr>`).join("")}
+      ${rows.map((l,i)=>`<tr><td>${i+1}${l.tip!=="myo"&&Number(l.serije)>1?` (${Number(l.serije)}×)`:""}</td><td>${l.kg??""}</td><td>${l.pon??""}${l.tip==="myo"?` + ${esc(l.mini||"")} (myo)`:""}</td><td>${l.rir??""}</td><td class="note">${esc(l.napomena||"")}</td></tr>`).join("")}
       </tbody></table></div>`).join("")}`;
 }
 function printCompletedWorkout(logs,recap){
