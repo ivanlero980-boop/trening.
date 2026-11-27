@@ -263,7 +263,7 @@ button{font:inherit}
 <dialog id="dlg"><div class="sheet" id="dlgBody"></div></dialog><div class="toast" id="toast"></div>
 <script>
 "use strict";
-const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,LOWER_CORE_FIX_VERSION=1,BUILD_ID="2026.11.27.8.5",BUILD_LABEL="Iteracija 8.5",BUILD_DATE="04.09.2026.";
+const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,LOWER_CORE_FIX_VERSION=1,BUILD_ID="2026.11.27.8.6",BUILD_LABEL="Iteracija 8.6",BUILD_DATE="04.09.2026.";
 const CATALOG_VERSION=2;
 const CORE_CHOICE_ID="__core_choice__",CORE_CHOICE_LABEL="Core — po izboru";
 const PODGRUPE=["Kvadriceps","Hamstring","Gluteus","Listovi","Grudi","Leđa","Rame — front","Rame — side","Rame — rear","Biceps","Triceps","Podlaktice","Trbuh/Core","Kardio"];
@@ -1104,7 +1104,6 @@ function kartStavka(s,i){
         <button class="chip ${u.tip==="myo"?"on":""}" data-tip="${i}:${j}" type="button">Myo</button>
         <button class="chip ${u.nap?"on":""}" data-note="${i}:${j}" type="button" aria-label="Komentar">💬</button>
         ${j?`<button class="chip" data-same="${i}:${j}" type="button" aria-label="Isto kao prethodni set">↳</button>`:""}
-        <button class="chip" data-del="${i}:${j}" type="button" aria-label="Obriši set" style="color:var(--red,#e5484d)">✕</button>
       </div>
       <div data-notebox="${i}:${j}" style="margin:0 0 6px 34px;${u.nap?"":"display:none"}"><input data-f="${i}:${j}:nap" value="${esc(u.nap||"")}" placeholder="Komentar (npr. bol u ramenu, sprava zauzeta)" aria-label="Komentar set ${j+1}" style="width:100%;padding:6px"></div></div>`;
   };
