@@ -263,7 +263,7 @@ button{font:inherit}
 <dialog id="dlg"><div class="sheet" id="dlgBody"></div></dialog><div class="toast" id="toast"></div>
 <script>
 "use strict";
-const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,LOWER_CORE_FIX_VERSION=1,BUILD_ID="2026.11.27.9.4",BUILD_LABEL="Iteracija 9.4",BUILD_DATE="27.11.2026.";
+const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,LOWER_CORE_FIX_VERSION=1,BUILD_ID="2026.11.27.9.5",BUILD_LABEL="Iteracija 9.5",BUILD_DATE="27.11.2026.";
 const CATALOG_VERSION=2;
 const CORE_CHOICE_ID="__core_choice__",CORE_CHOICE_LABEL="Core — po izboru";
 const PODGRUPE=["Kvadriceps","Hamstring","Gluteus","Listovi","Grudi","Leđa","Rame — front","Rame — side","Rame — rear","Biceps","Triceps","Podlaktice","Trbuh/Core","Kardio"];
@@ -347,10 +347,13 @@ function libraryIdForSabId(sid){
   const l=LIB().find(x=>x.id===sid);
   return l?l.id:"";
 }
-function sabForLibraryId(c,libId){
+function sabForLibraryId(c,libId,nth=0){
   if(!c||!libId)return null;
-  return (c.sabloni||[]).find(s=>s.sourceLibraryId===libId) || null;
+  const all=(c.sabloni||[]).filter(s=>s.sourceLibraryId===libId);
+  return all[nth]||null;
 }
+// The same workout can appear more than once in a week (e.g. Full body A ×2): each occurrence is its own snapshot.
+function identityRepeats(sid,weekStart=pon0){const ident=workoutIdentity(sid);return weeklyPlanIds(weekStart).filter(x=>workoutIdentity(x)===ident).length>1}
 function workoutsForWeek(weekStart){
   const c=cycleForDate(weekStart)||activeCycle();
   return c&&Array.isArray(c.sabloni)?c.sabloni:[];
@@ -934,7 +937,8 @@ function vDanas(f){
         const wk=monday(dateInput.value),sabs=workoutsForWeek(wk);
         if(workoutSelect&&sabs.length){
           const current=workoutSelect.value;
-          workoutSelect.innerHTML=sabs.map(s=>`<option value="${s.id}">${esc(cleanWorkoutName(s.naziv))}</option>`).join("");
+          const cnt={},tot={};sabs.forEach(s=>{const n=cleanWorkoutName(s.naziv);tot[n]=(tot[n]||0)+1});
+          workoutSelect.innerHTML=sabs.map(s=>{const n=cleanWorkoutName(s.naziv);cnt[n]=(cnt[n]||0)+1;return `<option value="${s.id}">${esc(n)}${tot[n]>1?" ("+cnt[n]+")":""}</option>`}).join("");
           const sid=suggestedWorkoutId(dateInput.value);
           workoutSelect.value=sabs.some(s=>s.id===sid)?sid:(sabs.some(s=>s.id===current)?current:sabs[0].id);
         }
@@ -1269,7 +1273,7 @@ function finishWorkout(sab){
   const wk=monday(session.datum);
   if(!S.sedmicniStatus)S.sedmicniStatus={};
   if(!S.sedmicniStatus[wk])S.sedmicniStatus[wk]={};
-  if(session.sabId)S.sedmicniStatus[wk][workoutIdentity(session.sabId)]=session.custom?"custom":"done";
+  if(session.sabId)S.sedmicniStatus[wk][identityRepeats(session.sabId,wk)?session.sabId:workoutIdentity(session.sabId)]=session.custom?"custom":"done";
   const dur=Math.max(1,Math.round((Date.now()-(session.startTs||Date.now()))/60000)),planAll=session.stavke.reduce((a,s)=>a+Number(s.plan||0),0),actual=records.reduce((a,l)=>a+Number(l.serije||1),0),volume=records.reduce((a,l)=>a+(l.kg!=null&&l.pon?Number(l.kg)*Number(l.pon):0),0);
   const progress=[];
   exerciseDone.forEach(x=>{
@@ -1445,13 +1449,13 @@ function inferLegacyWorkoutIdsForWeek(){
   return result;
 }
 function plannedWorkoutStatus(sid){
-  const ident=workoutIdentity(sid);
-  const st=weeklyStatuses()[ident]||weeklyStatuses()[sid];
+  const ident=workoutIdentity(sid),rep=identityRepeats(sid);
+  const st=rep?weeklyStatuses()[sid]:(weeklyStatuses()[ident]||weeklyStatuses()[sid]);
   if(st)return st;
   const logs=S.dnevnik.filter(l=>{
     if(monday(l.datum)!==pon0)return false;
     const logSid=l.originalSabId||l.sabId;
-    return logSid===sid || workoutIdentity(logSid)===ident;
+    return logSid===sid || (!rep&&workoutIdentity(logSid)===ident);
   });
   if(logs.some(l=>l.custom))return "custom";
   if(logs.length)return "done";
@@ -1470,9 +1474,10 @@ function defaultWeekPlanIds(c=cycleForDate(pon0)||activeCycle()){
   if(!p&&c.programNaziv)p=PROG().find(x=>x.naziv===c.programNaziv);
 
   if(p&&Array.isArray(p.treningIds)&&p.treningIds.length){
-    const ids=[];
+    const ids=[],seen={};
     p.treningIds.forEach(libId=>{
-      const snap=sabForLibraryId(c,libId);
+      const k=seen[libId]||0;seen[libId]=k+1;
+      const snap=sabForLibraryId(c,libId,k);
       if(snap&&!ids.includes(snap.id))ids.push(snap.id);
     });
     if(ids.length)return ids;
@@ -1480,7 +1485,7 @@ function defaultWeekPlanIds(c=cycleForDate(pon0)||activeCycle()){
   if(Number(c.frekvencija)>0&&(c.sabloni||[]).length===Number(c.frekvencija))return c.sabloni.map(s=>s.id);
   return (c.sabloni||[]).slice(0,Number(c.frekvencija)||c.sabloni.length).map(s=>s.id);
 }
-function planEntryToSnapshotId(entry,c){
+function planEntryToSnapshotId(entry,c,nth=0){
   if(!c||!entry)return "";
   if((c.sabloni||[]).some(s=>s.id===entry))return entry;
   let libId="";
@@ -1488,7 +1493,7 @@ function planEntryToSnapshotId(entry,c){
   if(LIB().some(x=>x.id===entry))libId=entry;
   // Old format: stored as snapshot ID from this or a previous cycle.
   if(!libId)libId=libraryIdForSabId(entry);
-  const snap=sabForLibraryId(c,libId);
+  const snap=sabForLibraryId(c,libId,nth)||sabForLibraryId(c,libId,0);
   return snap?snap.id:"";
 }
 function storedPlanIdsFromSnapshotIds(ids,c){
@@ -1501,7 +1506,7 @@ function weeklyPlanIds(weekStart=pon0,c=cycleForDate(weekStart)||activeCycle()){
   if(!S.sedmicniPlan)S.sedmicniPlan={};
   const saved=S.sedmicniPlan[weekStart];
   if(Array.isArray(saved)){
-    const mapped=saved.map(x=>planEntryToSnapshotId(x,c)).filter(Boolean);
+    const seen={},mapped=saved.map(x=>{const k=seen[x]||0;seen[x]=k+1;return planEntryToSnapshotId(x,c,k)}).filter(Boolean);
     if(mapped.length)return [...new Set(mapped)];
   }
   return defaultWeekPlanIds(c);
@@ -1546,9 +1551,9 @@ function vPregledSedmica(f){
     S.sedmicniPlan[pon0]=storedPlanIdsFromSnapshotIds(cur,c);save();render();
   });
   $("#view").querySelectorAll("[data-wstatus]").forEach(sel=>sel.onchange=()=>{
-    const id=sel.dataset.wstatus,ident=workoutIdentity(id);
+    const id=sel.dataset.wstatus,ident=workoutIdentity(id),key=identityRepeats(id)?id:ident;
     delete statuses[id];
-    if(sel.value==="pending")delete statuses[ident];else statuses[ident]=sel.value;
+    if(sel.value==="pending")delete statuses[key];else statuses[key]=sel.value;
     save();render();
   });
 }
