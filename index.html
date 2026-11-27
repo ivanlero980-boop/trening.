@@ -263,7 +263,7 @@ button{font:inherit}
 <dialog id="dlg"><div class="sheet" id="dlgBody"></div></dialog><div class="toast" id="toast"></div>
 <script>
 "use strict";
-const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,LOWER_CORE_FIX_VERSION=1,BUILD_ID="2026.11.27.10.3",BUILD_LABEL="Iteracija 10.3",BUILD_DATE="27.11.2026.";
+const KEY="trening_v1",SESSION_KEY="trening_v1_session",PREIMPORT_KEY="trening_v1_preimport",SCHEMA_VERSION=2,MIGRATIONS_VERSION=2,LOWER_CORE_FIX_VERSION=1,BUILD_ID="2026.11.27.10.4",BUILD_LABEL="Iteracija 10.4",BUILD_DATE="27.11.2026.";
 const CATALOG_VERSION=2;
 const CORE_CHOICE_ID="__core_choice__",CORE_CHOICE_LABEL="Core — po izboru";
 const PODGRUPE=["Kvadriceps","Hamstring","Gluteus","Listovi","Grudi","Leđa","Rame — front","Rame — side","Rame — rear","Biceps","Triceps","Podlaktice","Trbuh/Core","Kardio"];
@@ -2261,9 +2261,9 @@ function cycleProgressHtml(c){
   const f=x=>(x.kg!=null&&x.kg!==""?esc(x.kg)+"×":"")+x.pon;
   const wk={};logs.forEach(l=>{const n=wkOf(l.datum),g=GRUPA[vpod(l.vezbaId)]||vpod(l.vezbaId);if(!g)return;(wk[g]||(wk[g]={}));wk[g][n]=(wk[g][n]||0)+Number(l.serije||0)});
   const weeks=[...new Set(logs.map(l=>wkOf(l.datum)))].sort((a,b)=>a-b),train=weeks.filter(n=>!dl.has(n));
-  const vol=GRUPE_ORDER.filter(g=>wk[g]).map(g=>{const first=done.length?(wk[g][done[0]]||0):0,last=done.length?(wk[g][done[done.length-1]]||0):0,peak=Math.max(0,...done.map(n=>wk[g][n]||0)),avg=done.length?Math.round(done.reduce((a,n)=>a+(wk[g][n]||0),0)/done.length*10)/10:0,cur=running?(wk[g][thisWk]||0):null;return{g,first,last,peak,avg,cur}});
   // Weekly volume compares completed weeks only; the running week is shown as "u toku".
   const thisWk=cikNedelja(iso(new Date()),c),running=c.status==="aktivan"&&train.includes(thisWk),done=running?train.filter(n=>n!==thisWk):train;
+  const vol=GRUPE_ORDER.filter(g=>wk[g]).map(g=>{const first=done.length?(wk[g][done[0]]||0):0,last=done.length?(wk[g][done[done.length-1]]||0):0,peak=Math.max(0,...done.map(n=>wk[g][n]||0)),avg=done.length?Math.round(done.reduce((a,n)=>a+(wk[g][n]||0),0)/done.length*10)/10:0,cur=running?(wk[g][thisWk]||0):null;return{g,first,last,peak,avg,cur}});
   return `<div class="card"><div class="row between"><div class="xs">Napredak u ${c.otvoren?"periodu":"ciklusu"} · početak → kraj</div></div>
   ${rows.length?rows.map(r=>`<div class="row between sm" style="padding:6px 0;border-top:1px solid var(--line)"><span class="trunc" style="max-width:48%">${esc(vname(r.vid))}</span><span><span class="mute">${f(r.a)} →</span> <b class="num">${f(r.z)}</b> <span style="color:${r.pct>0?"var(--ok)":(r.pct<0?"var(--amber)":"var(--mute)")}">${r.pct>0?"+":""}${r.pct}%</span></span></div>`).join(""):`<div class="sm mute" style="margin-top:6px">Potrebna su bar dva treninga iste vježbe u ${c.otvoren?"periodu":"ciklusu"}.</div>`}
   <div class="sm mute" style="margin-top:6px">Najbolji set prvog i posljednjeg treninga vježbe (e1RM; bez tega po ponavljanjima). Deload nedjelje se ne računaju.</div></div>
